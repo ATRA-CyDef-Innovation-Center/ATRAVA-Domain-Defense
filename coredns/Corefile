@@ -1,0 +1,63 @@
+# CoreDNS Configuration for GCOT
+# This file is automatically managed by the GCOT DNS Policy Agent
+# Do not manually edit - changes will be overwritten on sync
+
+. {
+    # Enable logging for debugging (disable in production for performance)
+    # log
+    
+    # Health check endpoint (for Kubernetes liveness probes)
+    health :8080
+    
+    # Prometheus metrics endpoint
+    prometheus :9153
+    
+    # Load blacklist/whitelist policies from zone file
+    # This file is generated and updated by the GCOT Agent
+    file /var/lib/coredns/policies.zone {
+        # Return NXDOMAIN for blocked domains (domain doesn't exist)
+        except google.com github.com microsoft.com  # Exception example
+    }
+    
+    # Forward all other queries to upstream DNS servers
+    forward . 8.8.8.8 8.8.4.4 {
+        # Round-robin load balancing across upstream servers
+        policy round_robin
+        
+        # Maximum concurrent requests
+        max_concurrent 1000
+        
+        # Preserve original client IP
+        prefer_udp
+    }
+    
+    # Cache DNS responses
+    cache {
+        # Positive cache size
+        success 512
+        
+        # Negative cache (NXDOMAIN) size  
+        denial 256
+        
+        # Prefetch frequently accessed domains
+        prefetch 1 10m 80%
+    }
+    
+    # Error handling and fallback
+    errors {
+        consolidate [SERVFAIL NXDOMAIN REFUSED]
+        log
+    }
+    
+    # Rate limiting (optional, uncomment to enable)
+    # ratelimit . 100
+}
+
+# Example block for specific domain handling
+# Uncomment and modify as needed
+#
+# company.internal {
+#     file /var/lib/coredns/internal.zone
+#     cache
+#     errors
+# }

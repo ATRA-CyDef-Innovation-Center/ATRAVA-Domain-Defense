@@ -1,0 +1,189 @@
+version: '3.8'
+
+services:
+  # Unbound Recursive Resolver
+  gcot-unbound:
+    image: nlnetlabs/unbound:latest
+    container_name: gcot-unbound
+    
+    # Port mappings - Unbound listens on 53
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    
+    # Volumes
+    volumes:
+      - ./coredns/unbound.conf:/etc/unbound/unbound.conf:ro
+      - unbound-data:/var/lib/unbound
+      - unbound-logs:/var/log/unbound
+    
+    # Network configuration
+    networks:
+      - gcot-network
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "unbound-control", "status"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # CoreDNS with GCOT Policy Agent (Policy Enforcement)
+  gcot-coredns:
+    image: coredns/coredns:latest
+    container_name: gcot-coredns
+    
+    # Port mappings
+    ports:
+      - "5053:5053/udp"      # Internal policy enforcement (from Unbound)
+      - "5053:5053/tcp"      # Internal policy enforcement
+      - "8080:8080"          # Health check endpoint
+      - "9153:9153"          # Prometheus metrics
+    
+    # Volumes
+    volumes:
+      - ./coredns/Corefile:/etc/coredns/Corefile:ro
+      - coredns-data:/var/lib/coredns
+      - ./firebase-config.json:/opt/gcot-agent/firebase-config.json:ro
+    
+    # Environment variables
+    environment:
+      # Node identification
+      NODE_ID: node-docker-01
+      NODE_NAME: "Docker DNS Node"
+      NODE_IP: 172.20.0.2
+      
+      # Firebase configuration
+      FIREBASE_CONFIG_PATH: /opt/gcot-agent/firebase-config.json
+      
+      # CoreDNS paths
+      COREDNS_CONF_PATH: /etc/coredns/Corefile
+      
+      # Sync intervals (milliseconds)
+      SYNC_INTERVAL: 60000
+      HEALTH_CHECK_INTERVAL: 120000
+    
+    # Network configuration
+    networks:
+      - gcot-network
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Dependencies
+    depends_on:
+      - gcot-unbound
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Resource limits (adjust based on expected load)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Optional: Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gcot-prometheus
+    
+    ports:
+      - "9090:9090"
+    
+    volumes:
+      - ./deployment/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    
+    networks:
+      - gcot-network
+    
+    restart: unless-stopped
+    
+    depends_on:
+      - gcot-dns-node
+
+  # Optional: Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gcot-grafana
+    
+    ports:
+      - "3000:3000"
+    
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deployment/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+    
+    networks:
+      - gcot-network
+    
+    restart: unless-stopped
+    
+    depends_on:
+      - prometheus
+
+# Volume definitions
+volumes:
+  coredns-data:
+  unbound-data:
+  unbound-logs:
+  prometheus-data:
+  grafana-data:
+
+# Network definition
+networks:
+  gcot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Example override for multiple nodes
+# Create a docker-compose.override.yml to extend this configuration
