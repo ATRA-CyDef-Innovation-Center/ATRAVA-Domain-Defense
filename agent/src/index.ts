@@ -7,13 +7,26 @@ import { HealthMonitor } from './health-monitor';
 import { PolicyCache } from './policy-cache';
 import { UnboundManager } from './unbound-manager';
 
-// Load environment variables
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+const agentRoot = path.resolve(__dirname, '..');
+const envCandidates = [
+  path.resolve(process.cwd(), '.env.local'),
+  path.resolve(process.cwd(), '.env'),
+  path.join(agentRoot, '.env.local'),
+  path.join(agentRoot, '.env'),
+];
+
+for (const envPath of envCandidates) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 const NODE_ID = process.env.NODE_ID || 'unknown-node';
 const NODE_NAME = process.env.NODE_NAME || 'Default Node';
 const NODE_IP = process.env.NODE_IP || '0.0.0.0';
-const FIREBASE_CONFIG_PATH = process.env.FIREBASE_CONFIG_PATH || './firebase-config.json';
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
 const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL;
 const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -29,30 +42,19 @@ let unboundManager: UnboundManager;
 async function initializeFirebase() {
   console.log('[v0] Initializing Firebase...');
   try {
-    let serviceAccount: admin.ServiceAccount | null = null;
-
-    if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
-      serviceAccount = {
-        projectId: FIREBASE_PROJECT_ID,
-        clientEmail: FIREBASE_CLIENT_EMAIL,
-        privateKey: FIREBASE_PRIVATE_KEY,
-      };
-      console.log('[v0] Using Firebase Admin credentials from environment variables');
-    } else {
-      const configPath = path.resolve(FIREBASE_CONFIG_PATH);
-      if (!fs.existsSync(configPath)) {
-        throw new Error(
-          `Firebase config not found at ${configPath}. Provide FIREBASE_CONFIG_PATH or inline FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY values.`
-        );
-      }
-
-      serviceAccount = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      console.log('[v0] Using Firebase Admin credentials from service account file');
+    if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+      throw new Error(
+        'Missing Firebase Admin credentials. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in the environment.'
+      );
     }
 
-    if (!serviceAccount) {
-      throw new Error('Firebase service account could not be resolved');
-    }
+    const serviceAccount: admin.ServiceAccount = {
+      projectId: FIREBASE_PROJECT_ID,
+      clientEmail: FIREBASE_CLIENT_EMAIL,
+      privateKey: FIREBASE_PRIVATE_KEY,
+    };
+
+    console.log('[v0] Using Firebase Admin credentials from environment variables');
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
