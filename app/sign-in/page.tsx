@@ -1,7 +1,7 @@
 import LoginCard from '@/components/login-card';
 
 export const metadata = {
-  title: 'Sign In | ATRAVA Domain Defense',
+  title: 'SignIn | ATRAVA Domain Defense',
   description: 'Sign in to the ATRAVA Domain Defense DNS security control plane.',
 };
 
