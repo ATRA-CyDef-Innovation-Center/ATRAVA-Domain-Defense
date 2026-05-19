@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, } from 'firebase/auth';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { getFirebaseClientAuth } from '@/lib/firebase-client-auth';
 import { useAuth } from '@/components/auth-provider';
@@ -249,22 +250,7 @@ export default function LoginCard() {
 
             {/* Logo area */}
             <div className="mb-7 flex items-center justify-center">
-              <div className="flex items-center gap-3">
-                {/* Shield icon */}
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 shadow-lg shadow-cyan-500/30">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6 text-white" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5z" clipRule="evenodd"/>
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-400">
-                    ATRAVA
-                  </p>
-                  <p className="text-[15px] font-bold text-white leading-tight">
-                    Domain Defense
-                  </p>
-                </div>
-              </div>
+              <Image src="/atrava-logo.svg" alt="ATRAVA Domain Defense" width={220} height={52} priority className="h-auto w-[180px] sm:w-[220px]"/>
             </div>
 
             {/* Heading */}
