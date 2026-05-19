@@ -87,8 +87,6 @@
 ### Deploy Functions
 - [ ] Navigate to functions directory: `cd functions`
 - [ ] Install dependencies: `npm install`
-- [ ] Build TypeScript: `npm run build`
-- [ ] Verify lib/ directory created with compiled JS
 - [ ] Deploy to Firebase:
   ```bash
   firebase deploy --only functions
@@ -126,21 +124,20 @@
 ### Agent Setup
 - [ ] Navigate to agent directory: `cd agent`
 - [ ] Install dependencies: `npm install`
-- [ ] Download Firebase service account JSON key
-- [ ] Save as `agent/firebase-config.json`
+- [ ] Prepare Firebase Admin environment variables
+
 - [ ] Copy `.env.example` to `.env`
 - [ ] Edit `.env` with node configuration:
   ```bash
   NODE_ID=node-ph-01
   NODE_NAME="Philippines DNS Node"
   NODE_IP=10.0.1.50
-  FIREBASE_CONFIG_PATH=./firebase-config.json
+
   SYNC_INTERVAL=60000
   HEALTH_CHECK_INTERVAL=120000
   ```
 
 ### Testing Agent (Dev)
-- [ ] Build TypeScript: `npm run build`
 - [ ] Run agent: `npm start`
 - [ ] Verify logs show:
   - [ ] "Initializing Firebase..."
@@ -381,3 +378,6 @@ If issues occur:
 **Estimated Total Time**: 4-6 hours (including testing and troubleshooting)
 
 For support: See GCOT_README.md, FIRESTORE_SETUP.md, and COREDNS_SETUP.md
+
+
+

@@ -8,7 +8,7 @@ A complete Global Chain of Trust (GCOT) DNS security platform has been built wit
 
 ### 1. Admin Dashboard (Next.js + Firebase)
 
-**Location**: `/app`, `/components`
+**Location**: `/src/app`, `/src/components`
 
 **Features Implemented**:
 - ✅ Dark-themed enterprise interface (custom color scheme: navy/blue accent)
@@ -47,7 +47,7 @@ A complete Global Chain of Trust (GCOT) DNS security platform has been built wit
 **Technology Stack**:
 - Next.js 16.2.6 (App Router)
 - React 19
-- TypeScript
+- JavaScript
 - Tailwind CSS v4
 - shadcn/ui components
 - Recharts for data visualization
@@ -57,7 +57,7 @@ A complete Global Chain of Trust (GCOT) DNS security platform has been built wit
 
 ### 2. Firebase Backend Infrastructure
 
-**Location**: `/lib`, `/functions`
+**Location**: `/src/lib`, `/functions`
 
 **Components**:
 - ✅ Firebase initialization and client config
@@ -77,7 +77,7 @@ _system/policyManifest
 _system/syncTrigger
 ```
 
-**Cloud Functions** (TypeScript):
+**Cloud Functions** (JavaScript):
 - ✅ Domain APIs:
   - `addBlacklistDomain` - Add single domain to blacklist
   - `removeBlacklistDomain` - Remove domain from blacklist
@@ -100,33 +100,33 @@ _system/syncTrigger
 
 **Configuration Files**:
 - `/functions/package.json` - Dependencies and scripts
-- `/functions/tsconfig.json` - TypeScript configuration
+- `/functions/src/*.js` - JavaScript Cloud Functions source
 
 ### 3. DNS Policy Agent (Node.js)
 
 **Location**: `/agent`
 
 **Components**:
-- ✅ Main agent (`index.ts`):
+- ✅ Main agent (`index.js`):
   - Firebase initialization and node registration
   - Periodic policy synchronization (default: 1 minute)
   - Health checking (default: 2 minutes)
   - Graceful shutdown handling
   
-- ✅ Sync Manager (`sync-manager.ts`):
+- ✅ Sync Manager (`sync-manager.js`):
   - Fetch blacklist/whitelist policies from Firestore
   - Version-aware syncing (only sync on updates)
   - CoreDNS zone file generation
   - Policy cache updates
   - Node sync status reporting
   
-- ✅ Health Monitor (`health-monitor.ts`):
+- ✅ Health Monitor (`health-monitor.js`):
   - System uptime calculation
   - CPU and memory usage tracking
   - Node metric reporting
   - Health check validation
   
-- ✅ Policy Cache (`policy-cache.ts`):
+- ✅ Policy Cache (`policy-cache.js`):
   - In-memory policy storage
   - Domain matching (exact and wildcard)
   - Whitelist/blacklist lookup
@@ -141,7 +141,7 @@ _system/syncTrigger
 
 **Configuration Files**:
 - `/agent/package.json` - Dependencies and scripts
-- `/agent/tsconfig.json` - TypeScript configuration
+- `/agent/src/*.js` - JavaScript agent source
 - `/agent/.env.example` - Configuration template
 
 ### 4. CoreDNS Configuration
@@ -238,37 +238,37 @@ _system/syncTrigger
 ```
 /vercel/share/v0-project/
 ├── app/
-│   ├── layout.tsx
-│   ├── page.tsx                    # Dashboard
-│   ├── domains/page.tsx            # Domain management
-│   ├── nodes/page.tsx              # Node monitoring
-│   ├── logs/page.tsx               # Audit logs
-│   ├── settings/page.tsx           # Configuration
+│   ├── layout.jsx
+│   ├── page.jsx                    # Dashboard
+│   ├── domains/page.jsx            # Domain management
+│   ├── nodes/page.jsx              # Node monitoring
+│   ├── logs/page.jsx               # Audit logs
+│   ├── settings/page.jsx           # Configuration
 │   └── globals.css                 # Dark theme
 ├── components/
-│   ├── sidebar-nav.tsx             # Navigation
-│   ├── domain-dialogs.tsx          # Add/bulk import
+│   ├── sidebar-nav.jsx             # Navigation
+│   ├── domain-dialogs.jsx          # Add/bulk import
 │   └── ui/                         # shadcn components
 ├── lib/
-│   ├── firebase.ts                 # Firebase init
-│   ├── types.ts                    # Interfaces (106 lines)
-│   └── firestore-utils.ts          # Utilities (102 lines)
+│   ├── firebase.js                 # Firebase init
+│   ├── types.js                    # Shared data shapes
+│   └── firestore-utils.js          # Utilities
 ├── functions/
 │   ├── src/
-│   │   ├── index.ts                # Exports (26 lines)
-│   │   ├── domains.ts              # Domain APIs (199 lines)
-│   │   ├── nodes.ts                # Node APIs (221 lines)
-│   │   └── audit.ts                # Audit APIs (194 lines)
+│   │   ├── index.js                # Exports
+│   │   ├── domains.js              # Domain APIs
+│   │   ├── nodes.js                # Node APIs
+│   │   └── audit.js                # Audit APIs
 │   ├── package.json
-│   └── tsconfig.json
+│   └── src/*.js
 ├── agent/
 │   ├── src/
-│   │   ├── index.ts                # Main loop (138 lines)
-│   │   ├── sync-manager.ts         # Policy sync (148 lines)
-│   │   ├── health-monitor.ts       # Health checks (107 lines)
-│   │   └── policy-cache.ts         # Caching (60 lines)
+│   │   ├── index.js                # Main loop
+│   │   ├── sync-manager.js         # Policy sync
+│   │   ├── health-monitor.js       # Health checks
+│   │   └── policy-cache.js         # Caching
 │   ├── package.json
-│   ├── tsconfig.json
+│   ├── src/*.js
 │   └── .env.example
 ├── coredns/
 │   ├── Corefile                    # Config (64 lines)
@@ -299,17 +299,17 @@ pnpm dev
 
 ### 3. Deploy Cloud Functions
 ```bash
-cd functions && npm install && npm run build
+cd functions && npm install
 firebase deploy --only functions
 ```
 
 ### 4. Deploy DNS Agent
 ```bash
 cd agent && npm install
-cp firebase-config.json .
+
 cp .env.example .env
 # Edit .env with node details
-npm run build && npm start
+npm start
 ```
 
 ### 5. Deploy CoreDNS
@@ -401,7 +401,7 @@ All 6 routes compiled:
 - **Main Guide**: GCOT_README.md
 - **Firebase Setup**: FIRESTORE_SETUP.md
 - **CoreDNS Setup**: COREDNS_SETUP.md
-- **Source Code**: Well-commented TypeScript/JavaScript
+- **Source Code**: Well-commented JavaScript
 
 ## Version Information
 
@@ -422,7 +422,7 @@ All 6 routes compiled:
 - [x] Docker deployment setup
 - [x] Comprehensive documentation (1,153 lines)
 - [x] Build verification passing
-- [x] Type safety (TypeScript)
+- [x] JavaScript migration completed
 - [x] Error handling throughout
 - [x] Logging with [v0] prefix for debugging
 - [x] Configuration examples and .env templates
@@ -442,3 +442,6 @@ All 6 routes compiled:
 **Status**: ✅ **READY FOR DEPLOYMENT**
 
 The GCOT MVP is complete and ready for Firebase credential configuration and DNS node deployment.
+
+
+

@@ -108,7 +108,6 @@ pnpm dev
 ```bash
 cd functions
 npm install
-npm run build
 firebase deploy --only functions
 ```
 
@@ -118,15 +117,11 @@ firebase deploy --only functions
 cd agent
 npm install
 
-# Copy Firebase config
-cp /path/to/firebase-config.json .
-
 # Create .env file
 cp .env.example .env
 # Edit .env with your node configuration
 
 # Start agent
-npm run build
 npm start
 ```
 
@@ -147,7 +142,7 @@ sudo systemctl start gcot-agent
 ```
 /
 ├── app/                      # Next.js dashboard
-│   ├── page.tsx             # Dashboard homepage
+│   ├── page.jsx             # Dashboard homepage
 │   ├── domains/             # Domain management
 │   ├── nodes/               # Node monitoring
 │   ├── logs/                # Audit logs
@@ -155,29 +150,29 @@ sudo systemctl start gcot-agent
 │   └── globals.css          # Dark theme styling
 │
 ├── components/              # React components
-│   ├── sidebar-nav.tsx      # Navigation sidebar
-│   ├── domain-dialogs.tsx   # Domain add/bulk import
+│   ├── sidebar-nav.jsx      # Navigation sidebar
+│   ├── domain-dialogs.jsx   # Domain add/bulk import
 │   └── ui/                  # shadcn/ui components
 │
 ├── lib/                     # Shared utilities
-│   ├── firebase.ts          # Firebase initialization
-│   ├── types.ts             # TypeScript interfaces
-│   └── firestore-utils.ts   # Firestore helpers
+│   ├── firebase.js          # Firebase initialization
+│   ├── types.js             # Shared data shapes
+│   └── firestore-utils.js   # Firestore helpers
 │
 ├── functions/               # Firebase Cloud Functions
 │   ├── src/
-│   │   ├── index.ts         # Function exports
-│   │   ├── domains.ts       # Domain CRUD APIs
-│   │   ├── nodes.ts         # Node management APIs
-│   │   └── audit.ts         # Audit logging APIs
+│   │   ├── index.js         # Function exports
+│   │   ├── domains.js       # Domain CRUD APIs
+│   │   ├── nodes.js         # Node management APIs
+│   │   └── audit.js         # Audit logging APIs
 │   └── package.json
 │
 ├── agent/                   # DNS Policy Agent (Node.js)
 │   ├── src/
-│   │   ├── index.ts         # Agent main loop
-│   │   ├── sync-manager.ts  # Policy sync logic
-│   │   ├── health-monitor.ts # Node health checking
-│   │   └── policy-cache.ts  # In-memory policy cache
+│   │   ├── index.js         # Agent main loop
+│   │   ├── sync-manager.js  # Policy sync logic
+│   │   ├── health-monitor.js # Node health checking
+│   │   └── policy-cache.js  # In-memory policy cache
 │   └── package.json
 │
 ├── coredns/                 # CoreDNS configuration
@@ -297,7 +292,9 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=xxx
 NODE_ID=node-ph-01
 NODE_NAME="Philippines DNS Node"
 NODE_IP=10.0.1.50
-FIREBASE_CONFIG_PATH=./firebase-config.json
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=your-service-account-email
+FIREBASE_PRIVATE_KEY=your-private-key
 SYNC_INTERVAL=60000
 HEALTH_CHECK_INTERVAL=120000
 ```
@@ -369,3 +366,7 @@ Future enhancements:
 - [ ] API authentication (OAuth/API keys)
 - [ ] Database replication for HA
 - [ ] Kubernetes native deployment
+
+
+
+

@@ -124,7 +124,7 @@ NODE_NAME="Head Office DNS"           # Human-readable name
 NODE_IP=10.0.1.50                     # This node's IP address
 
 # Firebase Configuration
-FIREBASE_CONFIG_PATH=./firebase-config.json  # Path to Firebase service account
+FIREBASE_PROJECT_ID=your-project-id
 
 # CoreDNS Configuration
 COREDNS_CONF_PATH=/etc/coredns/Corefile    # Path to CoreDNS Corefile
@@ -138,7 +138,7 @@ HEALTH_CHECK_INTERVAL=120000          # Health check every 2 minutes
 
 1. Go to Firebase Console → Settings → Service Accounts
 2. Click "Generate New Private Key"
-3. Save as `agent/firebase-config.json`
+3. Export the Firebase Admin environment variables in your agent runtime
 
 ### Running the Agent
 
@@ -147,7 +147,7 @@ HEALTH_CHECK_INTERVAL=120000          # Health check every 2 minutes
 npm run dev
 
 # Production (after build)
-npm run build
+npm start
 npm start
 
 # Or with systemd (recommended)
@@ -185,7 +185,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
 # Start both CoreDNS and GCOT Agent
-CMD sh -c "coredns -conf /etc/coredns/Corefile & node dist/index.js"
+CMD sh -c "coredns -conf /etc/coredns/Corefile & node src/index.js"
 ```
 
 ### Docker Compose Example
@@ -205,12 +205,12 @@ services:
     volumes:
       - ./coredns/Corefile:/etc/coredns/Corefile:ro
       - coredns-data:/var/lib/coredns
-      - ./firebase-config.json:/opt/gcot-agent/firebase-config.json:ro
+      - ./.env.local:/opt/gcot-agent/.env.local:ro
     environment:
       NODE_ID: node-docker-01
       NODE_NAME: Docker DNS Node
       NODE_IP: 172.20.0.2
-      FIREBASE_CONFIG_PATH: /opt/gcot-agent/firebase-config.json
+      NODE_ENV: production
     networks:
       - gcot-network
     restart: unless-stopped
@@ -282,7 +282,7 @@ npm run dev
 
 ```bash
 # Check Firebase config file
-cat firebase-config.json
+cat .env.local
 
 # Verify network connectivity
 curl https://firestore.googleapis.com
@@ -368,3 +368,4 @@ ulimit -n 65536
 For more information, see:
 - CoreDNS Documentation: https://coredns.io
 - GCOT Dashboard: See GCOT_DASHBOARD.md
+

@@ -76,41 +76,41 @@
 │
 ├── Frontend Dashboard/
 │   ├── app/
-│   │   ├── page.tsx                 # Dashboard homepage
-│   │   ├── domains/page.tsx         # Domain management
-│   │   ├── nodes/page.tsx           # Node monitoring
-│   │   ├── logs/page.tsx            # Audit logs
-│   │   ├── settings/page.tsx        # Configuration
-│   │   ├── layout.tsx               # Root layout
+│   │   ├── page.jsx                 # Dashboard homepage
+│   │   ├── domains/page.jsx         # Domain management
+│   │   ├── nodes/page.jsx           # Node monitoring
+│   │   ├── logs/page.jsx            # Audit logs
+│   │   ├── settings/page.jsx        # Configuration
+│   │   ├── layout.jsx               # Root layout
 │   │   └── globals.css              # Dark theme
 │   ├── components/
-│   │   ├── sidebar-nav.tsx          # Navigation sidebar
-│   │   ├── domain-dialogs.tsx       # Add/bulk import dialogs
+│   │   ├── sidebar-nav.jsx          # Navigation sidebar
+│   │   ├── domain-dialogs.jsx       # Add/bulk import dialogs
 │   │   └── ui/                      # shadcn/ui components
 │   └── lib/
-│       ├── firebase.ts              # Firebase configuration
-│       ├── types.ts                 # TypeScript interfaces
-│       └── firestore-utils.ts       # Database utilities
+│       ├── firebase.js              # Firebase configuration
+│       ├── types.js                 # Shared data shapes
+│       └── firestore-utils.js       # Database utilities
 │
 ├── Cloud Functions/
 │   └── functions/
 │       ├── src/
-│       │   ├── index.ts             # Exports
-│       │   ├── domains.ts           # Domain API functions
-│       │   ├── nodes.ts             # Node API functions
-│       │   └── audit.ts             # Audit API functions
+│       │   ├── index.js             # Exports
+│       │   ├── domains.js           # Domain API functions
+│       │   ├── nodes.js             # Node API functions
+│       │   └── audit.js             # Audit API functions
 │       ├── package.json
-│       └── tsconfig.json
+│       └── src/*.js
 │
 ├── DNS Policy Agent/
 │   └── agent/
 │       ├── src/
-│       │   ├── index.ts             # Main agent loop
-│       │   ├── sync-manager.ts      # Policy synchronization
-│       │   ├── health-monitor.ts    # Health checking
-│       │   └── policy-cache.ts      # In-memory caching
+│       │   ├── index.js             # Main agent loop
+│       │   ├── sync-manager.js      # Policy synchronization
+│       │   ├── health-monitor.js    # Health checking
+│       │   └── policy-cache.js      # In-memory caching
 │       ├── package.json
-│       ├── tsconfig.json
+│       ├── src/*.js
 │       └── .env.example             # Configuration template
 │
 ├── CoreDNS Configuration/
@@ -133,9 +133,9 @@
 
 ### For Frontend Developers
 1. **[GCOT_README.md](./GCOT_README.md)** - Architecture overview
-2. **app/** directory - React/Next.js pages
-3. **components/** directory - Reusable components
-4. **lib/firebase.ts** - Firebase integration
+2. **src/app/** directory - React/Next.js pages
+3. **src/components/** directory - Reusable components
+4. **src/lib/firebase.js** - Firebase integration
 
 ### For Backend/DevOps Engineers
 1. **[FIRESTORE_SETUP.md](./FIRESTORE_SETUP.md)** - Database setup
@@ -158,7 +158,7 @@
 - `.env.example` (create from template) - Application configuration
 
 ### Source Code
-- **Frontend**: `app/**`, `components/**`, `lib/**`
+- **Frontend**: `src/app/**`, `src/components/**`, `src/hooks/**`, `src/lib/**`
 - **Cloud Functions**: `functions/src/**`
 - **DNS Agent**: `agent/src/**`
 
@@ -227,12 +227,12 @@ pnpm install && pnpm build && pnpm dev
 
 **Deploy Cloud Functions**
 ```bash
-cd functions && npm install && npm run build && firebase deploy --only functions
+cd functions && npm install && firebase deploy --only functions
 ```
 
 **Deploy DNS Agent**
 ```bash
-cd agent && npm install && cp .env.example .env && npm run build && npm start
+cd agent && npm install && cp .env.example .env && npm start
 ```
 
 **Deploy Full Stack (Docker)**
@@ -258,3 +258,4 @@ If you encounter issues:
 ---
 
 **Next Step**: Read [GCOT_README.md](./GCOT_README.md) to get started!
+

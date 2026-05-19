@@ -2,19 +2,14 @@
   "name": "gcot-functions",
   "version": "1.0.0",
   "description": "Firebase Cloud Functions for GCOT",
-  "main": "src/index.ts",
+  "main": "src/index.js",
   "scripts": {
-    "dev": "concurrently \"tsc --watch\" \"firebase emulators:start --only=functions\"",
-    "build": "tsc",
+    "dev": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",
     "firebase-functions": "^5.0.0"
   },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "concurrently": "^8.0.0",
-    "typescript": "^5.0.0"
-  }
+  "devDependencies": {}
 }

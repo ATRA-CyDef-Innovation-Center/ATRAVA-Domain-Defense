@@ -203,7 +203,7 @@ HEALTH_CHECK_INTERVAL_SECONDS=60
 
 ### Agent Code Update
 
-Add Unbound manager module to `agent/src/unbound-manager.ts`:
+Add Unbound manager module to `agent/src/unbound-manager.js`:
 
 ```typescript
 import { execSync } from 'child_process';

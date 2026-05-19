@@ -154,7 +154,7 @@ PolicyCache → Cache domain decisions in-memory
 NODE_ID=node-ph-01
 NODE_NAME="Philippines DNS Node"
 NODE_IP=10.0.1.50
-FIREBASE_CONFIG_PATH=./firebase-config.json
+FIREBASE_PROJECT_ID=your-project-id
 COREDNS_CONF_PATH=/etc/coredns/Corefile
 SYNC_INTERVAL=60000          # 1 minute
 HEALTH_CHECK_INTERVAL=120000 # 2 minutes
@@ -260,11 +260,11 @@ sudo mv coredns /usr/local/bin/
 # Install Policy Agent
 cd agent
 npm install
-npm run build
+npm start
 
 # Start services
 sudo systemctl start unbound coredns
-node dist/index.js
+node src/index.js
 ```
 
 ### Option 3: Kubernetes
@@ -355,3 +355,5 @@ On 4-core, 8GB RAM machine:
 5. **Container Orchestration**
    - Kubernetes-native deployment
    - Auto-scaling based on query load
+
+
