@@ -1,135 +1,99 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import {
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
-  type User as FirebaseUser,
-} from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
+import { getFirebaseClientAuth } from '@/lib/firebase-client-auth';
 import type { User as AppUser, UserRole } from '@/lib/types';
+import { SESSION_COOKIE_NAME } from '@/lib/auth-session';
 
-type SignUpPayload = {
-  displayName: string;
-  email: string;
-  password: string;
-  role: UserRole;
-};
+// ---------------------------------------------------------------------------
+// Context
+// ---------------------------------------------------------------------------
 
 type AuthContextValue = {
-  firebaseUser: FirebaseUser | null;
   userProfile: AppUser | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (payload: SignUpPayload) => Promise<void>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function normalizeProfile(uid: string, email: string | null, data: Record<string, any>): AppUser {
-  return {
-    uid,
-    email: email ?? data.email ?? '',
-    displayName: data.displayName ?? '',
-    role: (data.role ?? 'viewer') as UserRole,
-    createdAt: data.createdAt?.toDate?.() ?? new Date(),
-    lastLoginAt: data.lastLoginAt?.toDate?.(),
-  };
-}
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-
-      if (!user) {
+  const fetchProfile = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/profile');
+      if (!res.ok) {
         setUserProfile(null);
-        setLoading(false);
         return;
       }
-
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        const fallbackProfile = {
-          uid: user.uid,
-          email: user.email ?? '',
-          displayName: user.displayName ?? user.email?.split('@')[0] ?? 'User',
-          role: 'viewer' as UserRole,
-          createdAt: serverTimestamp(),
-          lastLoginAt: serverTimestamp(),
-        };
-
-        await setDoc(userRef, fallbackProfile, { merge: true });
-        setUserProfile(
-          normalizeProfile(user.uid, user.email, {
-            ...fallbackProfile,
-            createdAt: new Date(),
-            lastLoginAt: new Date(),
-          })
-        );
-        setLoading(false);
-        return;
+      const data = await res.json();
+      if (data?.user) {
+        setUserProfile({
+          uid: data.user.uid ?? '',
+          email: data.user.email ?? '',
+          displayName: data.user.displayName ?? '',
+          role: (data.user.role ?? 'viewer') as UserRole,
+          createdAt: data.user.createdAt ? new Date(data.user.createdAt) : new Date(),
+          lastLoginAt: data.user.lastLoginAt ? new Date(data.user.lastLoginAt) : undefined,
+        });
+      } else {
+        setUserProfile(null);
       }
-
-      await updateDoc(userRef, { lastLoginAt: serverTimestamp() });
-      setUserProfile(
-        normalizeProfile(user.uid, user.email, {
-          ...userSnap.data(),
-          lastLoginAt: new Date(),
-        })
-      );
+    } catch {
+      setUserProfile(null);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Hydrate user profile from the session cookie via a lightweight API call.
+    fetchProfile();
+
+    // Also watch Firebase auth state: if the Firebase session ends unexpectedly,
+    // clear the local profile so the guard redirects to sign-in.
+    const auth = getFirebaseClientAuth();
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (!firebaseUser && userProfile) {
+        setUserProfile(null);
+      }
     });
 
     return () => unsubscribe();
-  }, []);
-
-  const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
-  };
-
-  const signUp = async ({ displayName, email, password, role }: SignUpPayload) => {
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-
-    await updateProfile(credential.user, { displayName });
-    await setDoc(doc(db, 'users', credential.user.uid), {
-      uid: credential.user.uid,
-      email,
-      displayName,
-      role,
-      createdAt: serverTimestamp(),
-      lastLoginAt: serverTimestamp(),
-    });
-  };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const logout = async () => {
-    await signOut(auth);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      const auth = getFirebaseClientAuth();
+      await firebaseSignOut(auth).catch(() => {});
+    } finally {
+      setUserProfile(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, userProfile, loading, signIn, signUp, logout }}>
+    <AuthContext.Provider value={{ userProfile, loading, logout, refreshProfile: fetchProfile }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
+
 export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }
