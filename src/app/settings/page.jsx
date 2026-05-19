@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
 import { AuthGuard } from '@/components/auth-guard';
 import { useAuth } from '@/components/auth-provider';
 import { SidebarNav } from '@/components/sidebar-nav';
@@ -27,8 +27,8 @@ import { Save, UserPlus, Loader2, Link as LinkIcon } from 'lucide-react';
 export default function SettingsPage() {
     const { userProfile } = useAuth();
     const [settings, setSettings] = useState({
-        organizationName: 'ACME Corporation',
-        email: 'admin@company.com',
+        organizationName: '',
+        email: '',
         enableLogging: true,
         logRetention: '90',
         enableAlerts: true,
@@ -42,7 +42,21 @@ export default function SettingsPage() {
     const [inviteError, setInviteError] = useState('');
     const [inviteSuccessLink, setInviteSuccessLink] = useState('');
     useEffect(() => {
+        const settingsRef = doc(db, 'settings', 'default');
         const usersQuery = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+        const unsubscribeSettings = onSnapshot(settingsRef, (snapshot) => {
+            var _a, _b, _c, _d, _e;
+            if (!snapshot.exists())
+                return;
+            const data = snapshot.data();
+            setSettings({
+                organizationName: (_a = data.organizationName) !== null && _a !== void 0 ? _a : '',
+                email: (_b = data.email) !== null && _b !== void 0 ? _b : '',
+                enableLogging: (_c = data.enableLogging) !== null && _c !== void 0 ? _c : true,
+                logRetention: String((_d = data.logRetention) !== null && _d !== void 0 ? _d : '90'),
+                enableAlerts: (_e = data.enableAlerts) !== null && _e !== void 0 ? _e : true,
+            });
+        });
         const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
             setUsers(snapshot.docs.map((userDoc) => {
                 var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
@@ -59,14 +73,25 @@ export default function SettingsPage() {
                 };
             }));
         });
-        return () => unsubscribe();
+        return () => {
+            unsubscribeSettings();
+            unsubscribe();
+        };
     }, []);
     const handleChange = (field, value) => {
         setSettings((prev) => (Object.assign(Object.assign({}, prev), { [field]: value })));
     };
-    const handleSave = () => {
-        console.log('[v0] Settings saved:', settings);
-    };
+    const handleSave = () => __awaiter(this, void 0, void 0, function* () {
+        yield setDoc(doc(db, 'settings', 'default'), {
+            organizationName: settings.organizationName,
+            email: settings.email,
+            enableLogging: settings.enableLogging,
+            logRetention: Number(settings.logRetention) || 90,
+            enableAlerts: settings.enableAlerts,
+            updatedAt: serverTimestamp(),
+            updatedBy: (userProfile === null || userProfile === void 0 ? void 0 : userProfile.email) || 'workspace-user',
+        }, { merge: true });
+    });
     const handleInviteSubmit = (e) => __awaiter(this, void 0, void 0, function* () {
         e.preventDefault();
         if (!inviteEmail)

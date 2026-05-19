@@ -1,4 +1,7 @@
 'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { AuthGuard } from '@/components/auth-guard';
 import { useAuth } from '@/components/auth-provider';
 import { SidebarNav } from '@/components/sidebar-nav';
@@ -9,204 +12,438 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddDomainDialog, BulkImportDialog } from '@/components/domain-dialogs';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { hasPermission } from '@/lib/rbac';
-import { Search, Trash2, Eye } from 'lucide-react';
-import { useState } from 'react';
-export default function DomainsPage() {
-    const { userProfile } = useAuth();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState('blacklist');
-    const canManageDomains = hasPermission(userProfile === null || userProfile === void 0 ? void 0 : userProfile.role, 'domains.manage');
-    const canSubmitDomains = canManageDomains || hasPermission(userProfile === null || userProfile === void 0 ? void 0 : userProfile.role, 'domains.submit');
-    // Mock data
-    const blacklistedDomains = [
-        {
-            id: '1',
-            domain: 'malware.example.com',
-            threatLevel: 'critical',
-            sources: ['malware', 'botnet'],
-            addedAt: '2024-05-18',
-            addedBy: 'admin@company.com',
-        },
-        {
-            id: '2',
-            domain: 'phishing-site.net',
-            threatLevel: 'high',
-            sources: ['phishing'],
-            addedAt: '2024-05-17',
-            addedBy: 'threat-intel@company.com',
-        },
-        {
-            id: '3',
-            domain: 'botnet-command.io',
-            threatLevel: 'critical',
-            sources: ['botnet', 'c2'],
-            addedAt: '2024-05-16',
-            addedBy: 'automated',
-        },
-        {
-            id: '4',
-            domain: 'malicious-ads.com',
-            threatLevel: 'medium',
-            sources: ['malware'],
-            addedAt: '2024-05-15',
-            addedBy: 'admin@company.com',
-        },
-    ];
-    const whitelistedDomains = [
-        {
-            id: '1',
-            domain: 'trusted-vendor.com',
-            reason: 'Vendor API access',
-            addedAt: '2024-05-10',
-            addedBy: 'admin@company.com',
-        },
-        {
-            id: '2',
-            domain: 'safe-cdn.net',
-            reason: 'Content delivery network',
-            addedAt: '2024-05-08',
-            addedBy: 'network-admin@company.com',
-        },
-    ];
-    const getThreatLevelColor = (level) => {
-        switch (level) {
-            case 'critical':
-                return 'bg-red-900 text-red-100';
-            case 'high':
-                return 'bg-orange-900 text-orange-100';
-            case 'medium':
-                return 'bg-yellow-900 text-yellow-100';
-            default:
-                return 'bg-gray-900 text-gray-100';
-        }
+import { db } from '@/lib/firebase';
+import { Search, ShieldAlert, Trash2 } from 'lucide-react';
+
+function normalizeDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === 'function') return value.toDate();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDate(value) {
+  const date = normalizeDate(value);
+  if (!date) return 'Unknown';
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+function domainDocId(domain) {
+  return String(domain).toLowerCase().trim().replace(/[^a-z0-9-]/g, '_');
+}
+
+function parseBulkContent(content, fileType, type) {
+  if (fileType === 'json') {
+    const parsed = JSON.parse(content);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) => ({
+        domain: String(item?.domain ?? '').trim().toLowerCase(),
+        threatLevel: String(item?.threatLevel ?? 'medium').trim().toLowerCase(),
+        sources: Array.isArray(item?.sources) ? item.sources.map((entry) => String(entry).trim().toLowerCase()) : [],
+        reason: String(item?.reason ?? '').trim(),
+      }))
+      .filter((item) => item.domain);
+  }
+
+  const lines = String(content)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length <= 1) return [];
+
+  return lines.slice(1).map((line) => {
+    const [rawDomain = '', rawThreatLevel = 'medium', rawSourcesOrReason = ''] = line.split(',');
+    const domain = rawDomain.trim().toLowerCase();
+    if (type === 'blacklist') {
+      return {
+        domain,
+        threatLevel: rawThreatLevel.trim().toLowerCase() || 'medium',
+        sources: rawSourcesOrReason
+          .replace(/^"|"$/g, '')
+          .split(/[|,]/)
+          .map((entry) => entry.trim().toLowerCase())
+          .filter(Boolean),
+        reason: '',
+      };
+    }
+
+    return {
+      domain,
+      threatLevel: 'low',
+      sources: [],
+      reason: [rawThreatLevel, rawSourcesOrReason].filter(Boolean).join(',').trim(),
     };
-    return (<AuthGuard>
+  }).filter((item) => item.domain);
+}
+
+export default function DomainsPage() {
+  const { userProfile } = useAuth();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('blacklist');
+  const [blacklistedDomains, setBlacklistedDomains] = useState([]);
+  const [whitelistedDomains, setWhitelistedDomains] = useState([]);
+
+  const canManageDomains = hasPermission(userProfile?.role, 'domains.manage');
+  const canSubmitDomains = canManageDomains || hasPermission(userProfile?.role, 'domains.submit');
+  const actor = userProfile?.email || userProfile?.displayName || 'workspace-user';
+
+  useEffect(() => {
+    const unsubscribeBlacklist = onSnapshot(
+      collection(db, 'domains', 'blacklist', 'entries'),
+      (snapshot) => {
+        const items = snapshot.docs
+          .map((entryDoc) => ({ id: entryDoc.id, ...entryDoc.data() }))
+          .sort((a, b) => (normalizeDate(b.addedAt)?.getTime() || 0) - (normalizeDate(a.addedAt)?.getTime() || 0));
+        setBlacklistedDomains(items);
+      }
+    );
+
+    const unsubscribeWhitelist = onSnapshot(
+      collection(db, 'domains', 'whitelist', 'entries'),
+      (snapshot) => {
+        const items = snapshot.docs
+          .map((entryDoc) => ({ id: entryDoc.id, ...entryDoc.data() }))
+          .sort((a, b) => (normalizeDate(b.addedAt)?.getTime() || 0) - (normalizeDate(a.addedAt)?.getTime() || 0));
+        setWhitelistedDomains(items);
+      }
+    );
+
+    return () => {
+      unsubscribeBlacklist();
+      unsubscribeWhitelist();
+    };
+  }, []);
+
+  const filteredBlacklist = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return blacklistedDomains;
+    return blacklistedDomains.filter((domain) =>
+      String(domain.domain || '').toLowerCase().includes(query) ||
+      String(domain.addedBy || '').toLowerCase().includes(query) ||
+      (Array.isArray(domain.sources) && domain.sources.some((source) => String(source).toLowerCase().includes(query)))
+    );
+  }, [blacklistedDomains, searchQuery]);
+
+  const filteredWhitelist = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return whitelistedDomains;
+    return whitelistedDomains.filter((domain) =>
+      String(domain.domain || '').toLowerCase().includes(query) ||
+      String(domain.reason || '').toLowerCase().includes(query) ||
+      String(domain.addedBy || '').toLowerCase().includes(query)
+    );
+  }, [whitelistedDomains, searchQuery]);
+
+  const createAuditLog = async (action, details, status = 'success') => {
+    await addDoc(collection(db, 'auditLogs'), {
+      action,
+      userId: actor,
+      details,
+      status,
+      timestamp: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+    });
+  };
+
+  const triggerNodeSync = async () => {
+    await setDoc(
+      doc(db, '_system', 'syncTrigger'),
+      {
+        lastTriggered: new Date().toISOString(),
+        requiresSync: true,
+      },
+      { merge: true }
+    );
+  };
+
+  const handleAddDomain = async (payload) => {
+    const listType = activeTab === 'blacklist' ? 'blacklist' : 'whitelist';
+    const cleanDomain = String(payload?.domain ?? '').trim().toLowerCase();
+    if (!cleanDomain) return;
+
+    const entry = {
+      domain: cleanDomain,
+      addedAt: new Date().toISOString(),
+      addedBy: actor,
+      ...(listType === 'blacklist'
+        ? {
+            threatLevel: payload?.threatLevel || 'medium',
+            sources: Array.isArray(payload?.sources) ? payload.sources : [],
+          }
+        : {
+            reason: String(payload?.reason ?? '').trim(),
+          }),
+    };
+
+    await setDoc(doc(db, 'domains', listType, 'entries', domainDocId(cleanDomain)), entry, { merge: true });
+    await createAuditLog(
+      listType === 'blacklist' ? 'domain_added' : 'whitelist_added',
+      {
+        domain: cleanDomain,
+        type: listType,
+        ...(listType === 'blacklist'
+          ? { threatLevel: entry.threatLevel, sources: entry.sources }
+          : { reason: entry.reason }),
+      }
+    );
+    await triggerNodeSync();
+  };
+
+  const handleBulkImport = async ({ content, fileType }) => {
+    const listType = activeTab === 'blacklist' ? 'blacklist' : 'whitelist';
+    const entries = parseBulkContent(content, fileType, listType);
+    if (!entries.length) return;
+
+    const batch = writeBatch(db);
+    entries.forEach((entry) => {
+      const record = {
+        domain: entry.domain,
+        addedAt: new Date().toISOString(),
+        addedBy: actor,
+        ...(listType === 'blacklist'
+          ? {
+              threatLevel: entry.threatLevel || 'medium',
+              sources: entry.sources || [],
+            }
+          : {
+              reason: entry.reason || '',
+            }),
+      };
+      batch.set(doc(db, 'domains', listType, 'entries', domainDocId(entry.domain)), record, { merge: true });
+    });
+
+    await batch.commit();
+    await createAuditLog('bulk_import', { count: entries.length, type: listType });
+    await triggerNodeSync();
+  };
+
+  const handleDeleteDomain = async (listType, domain) => {
+    await deleteDoc(doc(db, 'domains', listType, 'entries', domain.id));
+    await createAuditLog(
+      listType === 'blacklist' ? 'domain_removed' : 'whitelist_removed',
+      { domain: domain.domain, type: listType }
+    );
+    await triggerNodeSync();
+  };
+
+  const getThreatLevelColor = (level) => {
+    switch (level) {
+      case 'critical':
+        return 'bg-red-900 text-red-100';
+      case 'high':
+        return 'bg-orange-900 text-orange-100';
+      case 'medium':
+        return 'bg-yellow-900 text-yellow-100';
+      default:
+        return 'bg-gray-900 text-gray-100';
+    }
+  };
+
+  return (
+    <AuthGuard>
       <div className="min-h-screen bg-background">
         <SidebarNav />
 
         <main className="ml-64 p-8">
-          <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Domain Management</h1>
-            <p className="text-muted-foreground">Manage blacklisted and whitelisted domains</p>
-          </div>
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-8">
+              <h1 className="mb-2 text-3xl font-bold text-foreground">Domain Management</h1>
+              <p className="text-muted-foreground">Manage blacklisted and whitelisted domains</p>
+            </div>
 
-          {!canManageDomains && canSubmitDomains && (<PermissionBanner message="Analysts can submit blacklist and whitelist changes for review, but destructive enforcement actions remain restricted to admins."/>)}
+            {!canManageDomains && canSubmitDomains && (
+              <PermissionBanner message="Analysts can submit blacklist and whitelist changes for review, but destructive enforcement actions remain restricted to admins." />
+            )}
 
-          {/* Action Buttons */}
-          {canSubmitDomains && (<div className="flex gap-4 mb-8 w-80">
-              <AddDomainDialog type={activeTab === 'blacklist' ? 'blacklist' : 'whitelist'} triggerLabel={canManageDomains ? undefined : 'Submit Domain'} submitLabel={canManageDomains ? undefined : 'Submit for Review'}/>
-              <BulkImportDialog type={activeTab === 'blacklist' ? 'blacklist' : 'whitelist'} triggerLabel={canManageDomains ? undefined : 'Submit Bulk Import'} submitLabel={canManageDomains ? undefined : 'Submit Import for Review'}/>
-            </div>)}
+            {canSubmitDomains && (
+              <div className="mb-8 flex w-80 gap-4">
+                <AddDomainDialog
+                  type={activeTab === 'blacklist' ? 'blacklist' : 'whitelist'}
+                  onSubmit={handleAddDomain}
+                  triggerLabel={canManageDomains ? undefined : 'Submit Domain'}
+                  submitLabel={canManageDomains ? undefined : 'Submit for Review'}
+                />
+                <BulkImportDialog
+                  type={activeTab === 'blacklist' ? 'blacklist' : 'whitelist'}
+                  onSubmit={handleBulkImport}
+                  triggerLabel={canManageDomains ? undefined : 'Submit Bulk Import'}
+                  submitLabel={canManageDomains ? undefined : 'Submit Import for Review'}
+                />
+              </div>
+            )}
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
-              <TabsTrigger value="blacklist">Blacklist</TabsTrigger>
-              <TabsTrigger value="whitelist">Whitelist</TabsTrigger>
-            </TabsList>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="blacklist">Blacklist</TabsTrigger>
+                <TabsTrigger value="whitelist">Whitelist</TabsTrigger>
+              </TabsList>
 
-            {/* Blacklist Tab */}
-            <TabsContent value="blacklist" className="mt-6">
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Blacklisted Domains</CardTitle>
-                      <CardDescription>Domains blocked from accessing your network</CardDescription>
+              <TabsContent value="blacklist" className="mt-6">
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Blacklisted Domains</CardTitle>
+                        <CardDescription>Domains blocked from accessing your network</CardDescription>
+                      </div>
+                      <Badge variant="destructive" className="px-4 py-2 text-lg">
+                        {blacklistedDomains.length} domains
+                      </Badge>
                     </div>
-                    <Badge variant="destructive" className="text-lg px-4 py-2">
-                      {blacklistedDomains.length} domains
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {/* Search */}
-                  <div className="mb-6 relative">
-                    <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground"/>
-                    <Input placeholder="Search domains..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 bg-secondary border-border"/>
-                  </div>
-
-                  {/* Domain List */}
-                  <div className="space-y-3">
-                    {blacklistedDomains.map((domain) => (<div key={domain.id} className="flex items-center justify-between p-4 bg-secondary rounded-lg border border-border hover:border-primary transition-colors">
-                        <div className="flex-1">
-                          <div className="font-medium text-foreground">{domain.domain}</div>
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getThreatLevelColor(domain.threatLevel)}`}>
-                              {domain.threatLevel}
-                            </span>
-                            {domain.sources.map((source) => (<Badge key={source} variant="outline" className="text-xs">
-                                {source}
-                              </Badge>))}
-                            <span className="text-xs text-muted-foreground">Added {domain.addedAt}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                            <Eye className="w-4 h-4"/>
-                          </Button>
-                          {canManageDomains && (<Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
-                              <Trash2 className="w-4 h-4"/>
-                            </Button>)}
-                        </div>
-                      </div>))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Whitelist Tab */}
-            <TabsContent value="whitelist" className="mt-6">
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Whitelisted Domains</CardTitle>
-                      <CardDescription>Domains always allowed to access your network</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative mb-6">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search domains..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="border-border bg-secondary pl-10"
+                      />
                     </div>
-                    <Badge className="text-lg px-4 py-2 bg-green-900 text-green-100">
-                      {whitelistedDomains.length} domains
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {/* Search */}
-                  <div className="mb-6 relative">
-                    <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground"/>
-                    <Input placeholder="Search domains..." className="pl-10 bg-secondary border-border"/>
-                  </div>
 
-                  {/* Domain List */}
-                  <div className="space-y-3">
-                    {whitelistedDomains.map((domain) => (<div key={domain.id} className="flex items-center justify-between p-4 bg-secondary rounded-lg border border-border hover:border-primary transition-colors">
-                        <div className="flex-1">
-                          <div className="font-medium text-foreground">{domain.domain}</div>
-                          <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <Badge variant="outline" className="text-xs">
-                              {domain.reason}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">Added {domain.addedAt}</span>
+                    <div className="space-y-3">
+                      {filteredBlacklist.length > 0 ? (
+                        filteredBlacklist.map((domain) => (
+                          <div
+                            key={domain.id}
+                            className="flex items-center justify-between rounded-lg border border-border bg-secondary p-4 transition-colors hover:border-primary"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium text-foreground">{domain.domain}</div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={`inline-block rounded px-2 py-1 text-xs font-medium ${getThreatLevelColor(domain.threatLevel)}`}>
+                                  {domain.threatLevel || 'unknown'}
+                                </span>
+                                {(domain.sources || []).map((source) => (
+                                  <Badge key={source} variant="outline" className="text-xs">
+                                    {source}
+                                  </Badge>
+                                ))}
+                                <span className="text-xs text-muted-foreground">
+                                  Added {formatDate(domain.addedAt)} by {domain.addedBy || 'unknown'}
+                                </span>
+                              </div>
+                            </div>
+                            {canManageDomains && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteDomain('blacklist', domain)}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                            <Eye className="w-4 h-4"/>
-                          </Button>
-                          {canManageDomains && (<Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
-                              <Trash2 className="w-4 h-4"/>
-                            </Button>)}
-                        </div>
-                      </div>))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                        ))
+                      ) : (
+                        <Empty className="border border-dashed border-border bg-secondary/40">
+                          <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                              <ShieldAlert />
+                            </EmptyMedia>
+                            <EmptyTitle>No blacklisted domains yet</EmptyTitle>
+                            <EmptyDescription>
+                              Domains added to the blacklist will appear here in real time.
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="whitelist" className="mt-6">
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Whitelisted Domains</CardTitle>
+                        <CardDescription>Domains always allowed to access your network</CardDescription>
+                      </div>
+                      <Badge className="bg-green-900 px-4 py-2 text-lg text-green-100">
+                        {whitelistedDomains.length} domains
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative mb-6">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search domains..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="border-border bg-secondary pl-10"
+                      />
+                    </div>
+
+                    <div className="space-y-3">
+                      {filteredWhitelist.length > 0 ? (
+                        filteredWhitelist.map((domain) => (
+                          <div
+                            key={domain.id}
+                            className="flex items-center justify-between rounded-lg border border-border bg-secondary p-4 transition-colors hover:border-primary"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium text-foreground">{domain.domain}</div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                {domain.reason && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {domain.reason}
+                                  </Badge>
+                                )}
+                                <span className="text-xs text-muted-foreground">
+                                  Added {formatDate(domain.addedAt)} by {domain.addedBy || 'unknown'}
+                                </span>
+                              </div>
+                            </div>
+                            {canManageDomains && (
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteDomain('whitelist', domain)}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <Empty className="border border-dashed border-border bg-secondary/40">
+                          <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                              <ShieldAlert />
+                            </EmptyMedia>
+                            <EmptyTitle>No whitelisted domains yet</EmptyTitle>
+                            <EmptyDescription>
+                              Domains added to the whitelist will appear here in real time.
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </div>
         </main>
       </div>
-    </AuthGuard>);
+    </AuthGuard>
+  );
 }
