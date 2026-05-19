@@ -6,6 +6,9 @@ export interface User {
   email: string;
   displayName?: string;
   role: UserRole;
+  status?: 'active' | 'pending' | 'disabled';
+  source?: 'invite' | 'manual';
+  emailVerifiedAt?: string | Date | null;
   createdAt: Date;
   lastLoginAt?: Date;
 }

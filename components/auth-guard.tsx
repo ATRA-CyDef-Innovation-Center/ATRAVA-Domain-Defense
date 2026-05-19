@@ -25,7 +25,7 @@ export function AuthGuard({
     }
 
     if (!userProfile) {
-      router.replace(`/sign-in?redirect=${encodeURIComponent(pathname)}`);
+      router.replace('/sign-in');
       return;
     }
 
