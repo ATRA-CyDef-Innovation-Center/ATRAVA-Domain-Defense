@@ -1,0 +1,26 @@
+FROM node:20-bullseye-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unbound \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN CORE_DNS_VERSION=1.12.6 \
+    && curl -fsSL "https://github.com/coredns/coredns/releases/download/v${CORE_DNS_VERSION}/coredns_${CORE_DNS_VERSION}_linux_amd64.tgz" -o /tmp/coredns.tgz \
+    && tar -xzf /tmp/coredns.tgz -C /usr/local/bin/ coredns \
+    && chmod +x /usr/local/bin/coredns \
+    && rm /tmp/coredns.tgz
+
+WORKDIR /opt/gcot-agent
+
+COPY agent/package*.json ./
+RUN npm install --production
+
+COPY agent/src ./src
+COPY deployment/entrypoint.sh ./entrypoint.sh
+
+RUN chmod +x entrypoint.sh
+
+VOLUME ["/var/lib/coredns", "/var/lib/unbound", "/var/log/unbound"]
+
+EXPOSE 53/udp 53/tcp 5053/udp 5053/tcp 8080 9153
+
+ENTRYPOINT ["/opt/gcot-agent/entrypoint.sh"]

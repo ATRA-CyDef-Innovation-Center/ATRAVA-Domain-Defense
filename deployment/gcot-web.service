@@ -1,0 +1,25 @@
+[Unit]
+Description=GCOT Next.js Web (Production)
+After=network.target
+
+[Service]
+Type=simple
+User=gcot
+Group=gcot
+WorkingDirectory=/opt/gcot
+# Load environment variables from .env.local (create and protect this file)
+EnvironmentFile=/opt/gcot/.env.local
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/gcot/node_modules/next/dist/bin/next start -p 3000
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+
+# Notes:
+# - Create system user 'gcot' and set ownership of /opt/gcot to that user.
+# - Protect /opt/gcot/.env.local (chmod 600) and do NOT commit it to git.
+# - To install on the server: copy this file to /etc/systemd/system/gcot-web.service
+#   then run: sudo systemctl daemon-reload && sudo systemctl enable --now gcot-web
