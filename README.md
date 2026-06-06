@@ -7,12 +7,15 @@ A comprehensive DNS-layer security platform for enforcing centralized domain pol
 GCOT consists of three main components:
 
 ### 1. **Admin Dashboard** (Next.js + Firebase)
+
 Web-based administration interface for managing DNS policies, monitoring node health, and reviewing audit logs.
 
 ### 2. **DNS Policy Agent** (Node.js)
+
 Standalone service that runs on each DNS node, fetches policies from Firestore, and syncs them to CoreDNS.
 
 ### 3. **CoreDNS** (DNS Server)
+
 Open-source DNS server configured to enforce blacklist/whitelist policies managed by GCOT.
 
 ## Architecture
@@ -56,8 +59,8 @@ Open-source DNS server configured to enforce blacklist/whitelist policies manage
     │           │           │
     ▼           ▼           ▼
 ┌────────┐ ┌────────┐ ┌──────────┐
-│ Unbound│ │CoreDNS │ │Prometheus│
-│ (Recur)│ │(Policy)│ │(Metrics) │
+│ Unbound│ │CoreDNS │ │Metrics   │
+│ (Recur)│ │(Policy)│ │(Export)  │
 └────────┘ └────────┘ └──────────┘
     │           │
     └───────────┴───────────┐
@@ -192,6 +195,7 @@ sudo systemctl start gcot-agent
 ## Features
 
 ### Domain Management
+
 - ✅ Add individual domains to blacklist/whitelist
 - ✅ Bulk import from CSV/JSON files
 - ✅ Threat level categorization (critical/high/medium/low)
@@ -199,6 +203,7 @@ sudo systemctl start gcot-agent
 - ✅ Domain history and audit trail
 
 ### Node Management
+
 - ✅ Multi-node DNS deployment
 - ✅ Real-time node status monitoring
 - ✅ Health checks and uptime tracking
@@ -206,6 +211,7 @@ sudo systemctl start gcot-agent
 - ✅ Node version management
 
 ### Audit & Compliance
+
 - ✅ Comprehensive audit logging
 - ✅ User action tracking
 - ✅ Policy change history
@@ -213,6 +219,7 @@ sudo systemctl start gcot-agent
 - ✅ 90-day automatic log retention
 
 ### Security
+
 - ✅ Dark-themed enterprise interface
 - ✅ Row-level security in Firestore (configurable)
 - ✅ Encrypted credential storage
@@ -224,6 +231,7 @@ sudo systemctl start gcot-agent
 ### Domain APIs
 
 #### Add Blacklist Domain
+
 ```bash
 curl -X POST https://[region]-gcot-project.cloudfunctions.net/domains-addBlacklistDomain \
   -H "Content-Type: application/json" \
@@ -236,6 +244,7 @@ curl -X POST https://[region]-gcot-project.cloudfunctions.net/domains-addBlackli
 ```
 
 #### Bulk Import
+
 ```bash
 curl -X POST https://[region]-gcot-project.cloudfunctions.net/domains-bulkImportDomains \
   -H "Content-Type: application/json" \
@@ -253,6 +262,7 @@ curl -X POST https://[region]-gcot-project.cloudfunctions.net/domains-bulkImport
 ```
 
 #### Get All Blacklist Domains
+
 ```bash
 curl https://[region]-gcot-project.cloudfunctions.net/domains-getBlacklistDomains
 ```
@@ -260,18 +270,20 @@ curl https://[region]-gcot-project.cloudfunctions.net/domains-getBlacklistDomain
 ### Node APIs
 
 #### Register Node
+
 ```bash
 curl -X POST https://[region]-gcot-project.cloudfunctions.net/nodes-registerNode \
   -H "Content-Type: application/json" \
   -d '{
     "nodeId": "node-ph-01",
     "name": "Philippines DNS Node",
-    "ip": "10.0.1.50",
+    "ip": "115.147.169.196",
     "version": "1.4.2"
   }'
 ```
 
 #### Sync Policies to All Nodes
+
 ```bash
 curl -X POST https://[region]-gcot-project.cloudfunctions.net/nodes-syncPoliciesToNodes
 ```
@@ -281,6 +293,7 @@ curl -X POST https://[region]-gcot-project.cloudfunctions.net/nodes-syncPolicies
 ### Environment Variables
 
 **Frontend (.env.local)**
+
 ```bash
 NEXT_PUBLIC_FIREBASE_API_KEY=xxx
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=xxx
@@ -288,10 +301,11 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=xxx
 ```
 
 **Agent (agent/.env)**
+
 ```bash
 NODE_ID=node-ph-01
 NODE_NAME="Philippines DNS Node"
-NODE_IP=10.0.1.50
+NODE_IP=115.147.169.196
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key
@@ -308,26 +322,18 @@ HEALTH_CHECK_INTERVAL=120000
 - **nodes/{nodeId}** - DNS node status and metrics
 - **auditLogs/{docId}** - Audit log entries
 - **nodeMetrics/{docId}** - Historical node metrics
-- **_system/policyManifest** - Current policy version
-- **_system/syncTrigger** - Sync trigger document
-
-## Monitoring
-
-### Prometheus Metrics
-CoreDNS exports metrics at `http://localhost:9153/metrics`:
-- `coredns_dns_requests_total` - Total DNS requests
-- `coredns_cache_hits_total` - Cache hits
-- `coredns_cache_misses_total` - Cache misses
+- **\_system/policyManifest** - Current policy version
+- **\_system/syncTrigger** - Sync trigger document
 
 ### Health Checks
+
 - Dashboard: `http://localhost:3000`
 - CoreDNS: `curl http://localhost:8080/health`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000/dashboard`
 
 ## Troubleshooting
 
 See detailed guides:
+
 - **Firebase Issues**: See [FIRESTORE_SETUP.md](./FIRESTORE_SETUP.md)
 - **CoreDNS Issues**: See [COREDNS_SETUP.md](./COREDNS_SETUP.md)
 - **Agent Issues**: Check `npm run dev` output
@@ -358,6 +364,7 @@ Current Version: 1.0.0 (MVP)
 ## Roadmap
 
 Future enhancements:
+
 - [ ] Multi-tenant support
 - [ ] Advanced threat intelligence integration
 - [ ] Machine learning-based threat detection
@@ -366,7 +373,3 @@ Future enhancements:
 - [ ] API authentication (OAuth/API keys)
 - [ ] Database replication for HA
 - [ ] Kubernetes native deployment
-
-
-
-
