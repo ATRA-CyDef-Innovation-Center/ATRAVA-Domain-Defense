@@ -11,40 +11,42 @@ A complete Global Chain of Trust (GCOT) DNS security platform has been built wit
 **Location**: `/src/app`, `/src/components`
 
 **Features Implemented**:
+
 - ✅ Dark-themed enterprise interface (custom color scheme: navy/blue accent)
 - ✅ Sidebar navigation with active state indicators
 - ✅ Dashboard homepage with:
-  - Real-time statistics cards (DNS queries, block rate, node count)
-  - DNS activity chart (24-hour allowed vs blocked)
-  - Threat category breakdown chart
-  - Recent blocks list with threat badges
+    - Real-time statistics cards (DNS queries, block rate, node count)
+    - DNS activity chart (24-hour allowed vs blocked)
+    - Threat category breakdown chart
+    - Recent blocks list with threat badges
 - ✅ Domain management page with:
-  - Blacklist/Whitelist tabs
-  - Add individual domain dialog
-  - Bulk import dialog (CSV/JSON support)
-  - Domain search and filtering
-  - Threat level color coding
-  - Bulk action support
+    - Blacklist/Whitelist tabs
+    - Add individual domain dialog
+    - Bulk import dialog (CSV/JSON support)
+    - Domain search and filtering
+    - Threat level color coding
+    - Bulk action support
 - ✅ DNS node monitoring page with:
-  - Philippines DNS Node status and location display
-  - Node health metrics (uptime, queries/day, block rate)
-  - CoreDNS and Unbound service status monitoring
-  - Manual policy sync and log viewing options
-  - Real-time heartbeat from policy agent
-  - Foundation for adding additional nodes
+    - Philippines DNS Node status and location display
+    - Node health metrics (uptime, queries/day, block rate)
+    - CoreDNS and Unbound service status monitoring
+    - Manual policy sync and log viewing options
+    - Real-time heartbeat from policy agent
+    - Foundation for adding additional nodes
 - ✅ Audit logs page with:
-  - Action filtering by type
-  - Date-based search
-  - User/domain filtering
-  - Export functionality
-  - Comprehensive action categorization
+    - Action filtering by type
+    - Date-based search
+    - User/domain filtering
+    - Export functionality
+    - Comprehensive action categorization
 - ✅ Settings page with:
-  - General configuration (org name, email, logging)
-  - Threat feed configuration
-  - User management interface
-  - Log retention settings
+    - General configuration (org name, email, logging)
+    - Threat feed configuration
+    - User management interface
+    - Log retention settings
 
 **Technology Stack**:
+
 - Next.js 16.2.6 (App Router)
 - React 19
 - JavaScript
@@ -60,12 +62,14 @@ A complete Global Chain of Trust (GCOT) DNS security platform has been built wit
 **Location**: `/src/lib`, `/functions`
 
 **Components**:
+
 - ✅ Firebase initialization and client config
 - ✅ Firestore data type definitions
 - ✅ Firestore utility functions for CRUD operations
 - ✅ Security rules documentation
 
 **Firestore Schema**:
+
 ```
 domains/
   ├── blacklist/entries/{domainId}
@@ -78,27 +82,27 @@ _system/syncTrigger
 ```
 
 **Cloud Functions** (JavaScript):
+
 - ✅ Domain APIs:
-  - `addBlacklistDomain` - Add single domain to blacklist
-  - `removeBlacklistDomain` - Remove domain from blacklist
-  - `getBlacklistDomains` - Fetch all blacklist entries
-  - `bulkImportDomains` - Import domains from file
-  
+    - `addBlacklistDomain` - Add single domain to blacklist
+    - `removeBlacklistDomain` - Remove domain from blacklist
+    - `getBlacklistDomains` - Fetch all blacklist entries
+    - `bulkImportDomains` - Import domains from file
 - ✅ Node APIs:
-  - `registerNode` - Register new DNS node
-  - `getNodeStatus` - Query node health status
-  - `updateNodeStatus` - Update node metrics
-  - `getAllNodes` - List all DNS nodes
-  - `syncPoliciesToNodes` - Broadcast policies to all nodes
-  
+    - `registerNode` - Register new DNS node
+    - `getNodeStatus` - Query node health status
+    - `updateNodeStatus` - Update node metrics
+    - `getAllNodes` - List all DNS nodes
+    - `syncPoliciesToNodes` - Broadcast policies to all nodes
 - ✅ Audit APIs:
-  - `logAction` - Log user/system actions
-  - `getAuditLogs` - Query audit logs with filters
-  - `getAuditLogsByDateRange` - Time-based log retrieval
-  - `deleteOldAuditLogs` - Scheduled cleanup (7-day schedule)
-  - `getAuditStatistics` - Summary statistics
+    - `logAction` - Log user/system actions
+    - `getAuditLogs` - Query audit logs with filters
+    - `getAuditLogsByDateRange` - Time-based log retrieval
+    - `deleteOldAuditLogs` - Scheduled cleanup (7-day schedule)
+    - `getAuditStatistics` - Summary statistics
 
 **Configuration Files**:
+
 - `/functions/package.json` - Dependencies and scripts
 - `/functions/src/*.js` - JavaScript Cloud Functions source
 
@@ -107,32 +111,31 @@ _system/syncTrigger
 **Location**: `/agent`
 
 **Components**:
+
 - ✅ Main agent (`index.js`):
-  - Firebase initialization and node registration
-  - Periodic policy synchronization (default: 1 minute)
-  - Health checking (default: 2 minutes)
-  - Graceful shutdown handling
-  
+    - Firebase initialization and node registration
+    - Periodic policy synchronization (default: 1 minute)
+    - Health checking (default: 2 minutes)
+    - Graceful shutdown handling
 - ✅ Sync Manager (`sync-manager.js`):
-  - Fetch blacklist/whitelist policies from Firestore
-  - Version-aware syncing (only sync on updates)
-  - CoreDNS zone file generation
-  - Policy cache updates
-  - Node sync status reporting
-  
+    - Fetch blacklist/whitelist policies from Firestore
+    - Version-aware syncing (only sync on updates)
+    - CoreDNS zone file generation
+    - Policy cache updates
+    - Node sync status reporting
 - ✅ Health Monitor (`health-monitor.js`):
-  - System uptime calculation
-  - CPU and memory usage tracking
-  - Node metric reporting
-  - Health check validation
-  
+    - System uptime calculation
+    - CPU and memory usage tracking
+    - Node metric reporting
+    - Health check validation
 - ✅ Policy Cache (`policy-cache.js`):
-  - In-memory policy storage
-  - Domain matching (exact and wildcard)
-  - Whitelist/blacklist lookup
-  - Cache statistics
+    - In-memory policy storage
+    - Domain matching (exact and wildcard)
+    - Whitelist/blacklist lookup
+    - Cache statistics
 
 **Features**:
+
 - Configurable sync and health check intervals
 - Environment-based configuration (.env)
 - Comprehensive logging with [v0] prefix
@@ -140,6 +143,7 @@ _system/syncTrigger
 - Graceful degradation on failures
 
 **Configuration Files**:
+
 - `/agent/package.json` - Dependencies and scripts
 - `/agent/src/*.js` - JavaScript agent source
 - `/agent/.env.example` - Configuration template
@@ -149,64 +153,65 @@ _system/syncTrigger
 **Location**: `/coredns`, `/deployment`
 
 **Files**:
+
 - ✅ `Corefile` - Main CoreDNS configuration:
-  - Health endpoint on port 8080
-  - Prometheus metrics on port 9153
-  - Zone file loading for policies
-  - Upstream DNS forwarding (Google DNS)
-  - Response caching with prefetching
-  - Error consolidation and logging
-  
+    - Health endpoint on port 8080
+    - Zone file loading for policies
+    - Upstream DNS forwarding (Google DNS)
+    - Response caching with prefetching
+    - Error consolidation and logging
 - ✅ `policies.zone.example` - Sample zone file:
-  - DNSSEC SOA/NS records
-  - Blacklisted domain entries (malware/phishing/C2/ransomware/exploits)
-  - Whitelisted domain comments
-  - Threat categorization comments
+    - DNSSEC SOA/NS records
+    - Blacklisted domain entries (malware/phishing/C2/ransomware/exploits)
+    - Whitelisted domain comments
+    - Threat categorization comments
 
 **Deployment**:
+
 - ✅ `docker-compose.yml` - Full stack orchestration:
-  - CoreDNS service with volume mapping
-  - Prometheus for metrics collection
-  - Grafana for visualization
-  - Resource limits and health checks
-  - Automatic restart policies
-  - Custom networking (172.20.0.0/16)
+    - CoreDNS service with volume mapping
+    - Metrics collection and visualization
+    - Resource limits and health checks
+    - Automatic restart policies
+    - Custom networking (172.20.0.0/16)
 
 ### 5. Documentation
 
 **Files Created**:
+
 - ✅ `GCOT_README.md` - Main project documentation (363 lines)
-  - Architecture overview
-  - Quick start guide
-  - Feature list
-  - API documentation
-  - Configuration guide
-  - Monitoring setup
-  - Troubleshooting
+    - Architecture overview
+    - Quick start guide
+    - Feature list
+    - API documentation
+    - Configuration guide
+    - Metrics setup
+    - Troubleshooting
 
 - ✅ `FIRESTORE_SETUP.md` - Firebase/Firestore guide (212 lines)
-  - Database schema definition
-  - Index requirements
-  - Security rules
-  - Initial data setup
-  - Troubleshooting
+    - Database schema definition
+    - Index requirements
+    - Security rules
+    - Initial data setup
+    - Troubleshooting
 
 - ✅ `COREDNS_SETUP.md` - CoreDNS deployment guide (371 lines)
-  - Installation methods (Docker, Linux)
-  - Configuration options
-  - Agent setup and deployment
-  - Docker Compose examples
-  - Network configuration
-  - Monitoring and alerting
-  - Troubleshooting
-  - Performance tuning
-  - Security best practices
+    - Installation methods (Docker, Linux)
+    - Configuration options
+    - Agent setup and deployment
+    - Docker Compose examples
+    - Network configuration
+    - Monitoring and alerting
+    - Troubleshooting
+    - Performance tuning
+    - Security best practices
 
 - ✅ `GCOT_BUILD_SUMMARY.md` - This file
 
 ## Key Features Implemented
 
 ### Frontend
+
 - [x] Dark enterprise theme with blue accent (primary: oklch(0.5 0.2 265))
 - [x] Real-time statistics and charts
 - [x] Bulk domain import with CSV/JSON support
@@ -217,6 +222,7 @@ _system/syncTrigger
 - [x] Responsive design with Tailwind CSS
 
 ### Backend
+
 - [x] Firebase Firestore integration
 - [x] Cloud Functions for domain management
 - [x] Node registration and health tracking
@@ -226,11 +232,12 @@ _system/syncTrigger
 - [x] Error handling and validation
 
 ### DNS Infrastructure
+
 - [x] CoreDNS integration with zone files
 - [x] Policy agent with continuous sync
 - [x] Health monitoring and metrics
 - [x] Docker-based deployment
-- [x] Prometheus metrics export
+- [x] Metrics export
 - [x] Multi-node support
 
 ## File Structure
@@ -284,12 +291,14 @@ _system/syncTrigger
 ## Setup Instructions
 
 ### 1. Firebase Configuration
+
 - Create Firebase project
 - Enable Firestore Database
 - Download service account JSON
 - Set FIRESTORE_SETUP.md environment variables
 
 ### 2. Deploy Frontend
+
 ```bash
 pnpm install
 pnpm build
@@ -298,12 +307,14 @@ pnpm dev
 ```
 
 ### 3. Deploy Cloud Functions
+
 ```bash
 cd functions && npm install
 firebase deploy --only functions
 ```
 
 ### 4. Deploy DNS Agent
+
 ```bash
 cd agent && npm install
 
@@ -313,7 +324,9 @@ npm start
 ```
 
 ### 5. Deploy CoreDNS
+
 ```bash
+# Use the production compose
 docker-compose -f deployment/docker-compose.yml up -d
 # Or: sudo systemctl enable --now gcot-agent
 ```
@@ -321,44 +334,46 @@ docker-compose -f deployment/docker-compose.yml up -d
 ## Testing
 
 ### Build Verification
+
 ```bash
 cd /vercel/share/v0-project
 pnpm build  # ✅ Successfully compiled (7.2s)
 ```
 
 All 6 routes compiled:
+
 - ✅ / (Dashboard)
 - ✅ /domains (Domain Management)
 - ✅ /nodes (Node Monitoring)
 - ✅ /logs (Audit Logs)
 - ✅ /settings (Settings)
-- ✅ /_not-found (Error page)
+- ✅ /\_not-found (Error page)
 
 ### Next Steps for User
 
 1. **Connect Firebase Integration**
-   - Provide Firebase credentials in Settings → Vars
-   - Required env vars: NEXT_PUBLIC_FIREBASE_API_KEY, etc.
+    - Provide Firebase credentials in Settings → Vars
+    - Required env vars: NEXT_PUBLIC_FIREBASE_API_KEY, etc.
 
 2. **Set Up First DNS Node**
-   - Install agent in test environment
-   - Verify policy synchronization in dashboard
-   - Test DNS blocking through node
+    - Install agent in test environment
+    - Verify policy synchronization in dashboard
+    - Test DNS blocking through node
 
 3. **Add Threat Data**
-   - Use bulk import to add your threat database domains
-   - Tag with threat levels and sources
-   - Verify policies synced to nodes
+    - Use bulk import to add your threat database domains
+    - Tag with threat levels and sources
+    - Verify policies synced to nodes
 
 4. **Configure Upstream DNS**
-   - Add backup DNS servers in CoreDNS config
-   - Set up failover nodes for redundancy
-   - Configure network clients to use GCOT nodes
+    - Add backup DNS servers in CoreDNS config
+    - Set up failover nodes for redundancy
+    - Configure network clients to use GCOT nodes
 
 5. **Monitor & Alert**
-   - Set up Prometheus scraping
-   - Configure Grafana dashboards
-   - Create alerting rules for node failures
+    - Set up metrics collection
+    - Configure dashboard visualizations
+    - Create alerting rules for node failures
 
 ## Performance Metrics
 
@@ -442,6 +457,3 @@ All 6 routes compiled:
 **Status**: ✅ **READY FOR DEPLOYMENT**
 
 The GCOT MVP is complete and ready for Firebase credential configuration and DNS node deployment.
-
-
-

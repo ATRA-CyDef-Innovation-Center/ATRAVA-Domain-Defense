@@ -77,36 +77,36 @@ server:
     interface: 0.0.0.0
     interface: ::0
     port: 53
-    
+
     # TCP configuration
     tcp-idle-timeout: 30000
     tcp-keepalive: 120000
     tcp-upstream: yes
-    
+
     # Thread and cache settings
     num-threads: 4
     msg-cache-size: 100m
     rrset-cache-size: 200m
-    
+
     # Security
     hide-identity: yes
     hide-version: yes
     qname-minimisation: yes
     rrset-roundrobin: yes
-    
+
     # Logging
     logfile: "/var/log/unbound/unbound.log"
     log-queries: yes
     log-replies: yes
     log-tag-queryreply: yes
     verbosity: 1
-    
+
     # Extended statistics
     extended-statistics: yes
-    
+
     # Root hints (auto-updated)
     auto-trust-anchor-file: "/etc/unbound/root.key"
-    
+
     # Local data (optional - for internal domains)
     local-zone: "local." static
     local-data: "ns.local. IN A 127.0.0.1"
@@ -147,14 +147,13 @@ localhost:5053 {
     # Policy enforcement plugins
     reload 10s
     log
-    
+
     # Blacklist/whitelist zones from GCOT policies
     file /var/lib/coredns/policies.zone policies.local
-    
+
     # Allow these to pass through to upstream
     forward . 8.8.8.8 1.1.1.1
     cache 3600
-    prometheus :9153
 }
 
 # Public interface (returns REFUSED for direct queries)
@@ -206,83 +205,85 @@ HEALTH_CHECK_INTERVAL_SECONDS=60
 Add Unbound manager module to `agent/src/unbound-manager.js`:
 
 ```typescript
-import { execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
-import admin from 'firebase-admin';
+import { execSync } from 'child_process'
+import { readFileSync, writeFileSync } from 'fs'
+import admin from 'firebase-admin'
 
 export class UnboundManager {
-  private unboundCtlSocket: string;
-  private logFile: string;
+    private unboundCtlSocket: string
+    private logFile: string
 
-  constructor(
-    unboundCtlSocket: string = '/var/run/unbound/unbound.ctl',
-    logFile: string = '/var/log/unbound/unbound.log'
-  ) {
-    this.unboundCtlSocket = unboundCtlSocket;
-    this.logFile = logFile;
-  }
-
-  // Check Unbound status
-  async getStatus(): Promise<any> {
-    try {
-      const stats = execSync('unbound-control stats', { encoding: 'utf-8' });
-      return this.parseStats(stats);
-    } catch (error) {
-      console.error('[v0] Unbound status check failed:', error);
-      return null;
+    constructor(
+        unboundCtlSocket: string = '/var/run/unbound/unbound.ctl',
+        logFile: string = '/var/log/unbound/unbound.log'
+    ) {
+        this.unboundCtlSocket = unboundCtlSocket
+        this.logFile = logFile
     }
-  }
 
-  // Reload Unbound configuration
-  async reload(): Promise<boolean> {
-    try {
-      execSync('unbound-control reload');
-      console.log('[v0] Unbound reloaded successfully');
-      return true;
-    } catch (error) {
-      console.error('[v0] Unbound reload failed:', error);
-      return false;
+    // Check Unbound status
+    async getStatus(): Promise<any> {
+        try {
+            const stats = execSync('unbound-control stats', {
+                encoding: 'utf-8',
+            })
+            return this.parseStats(stats)
+        } catch (error) {
+            console.error('[v0] Unbound status check failed:', error)
+            return null
+        }
     }
-  }
 
-  // Get Unbound cache statistics
-  async getCacheStats(): Promise<{ hits: number; misses: number }> {
-    try {
-      const status = await this.getStatus();
-      return {
-        hits: parseInt(status?.['total.cachehits'] || '0'),
-        misses: parseInt(status?.['total.cachemiss'] || '0'),
-      };
-    } catch (error) {
-      console.error('[v0] Cache stats retrieval failed:', error);
-      return { hits: 0, misses: 0 };
+    // Reload Unbound configuration
+    async reload(): Promise<boolean> {
+        try {
+            execSync('unbound-control reload')
+            console.log('[v0] Unbound reloaded successfully')
+            return true
+        } catch (error) {
+            console.error('[v0] Unbound reload failed:', error)
+            return false
+        }
     }
-  }
 
-  // Parse unbound-control stats output
-  private parseStats(stats: string): Record<string, string> {
-    const result: Record<string, string> = {};
-    stats.split('\n').forEach((line) => {
-      const [key, value] = line.split('=');
-      if (key && value) {
-        result[key.trim()] = value.trim();
-      }
-    });
-    return result;
-  }
-
-  // Monitor Unbound logs for queries (optional)
-  async getTailLogs(lines: number = 50): Promise<string[]> {
-    try {
-      const logs = execSync(`tail -n ${lines} ${this.logFile}`, {
-        encoding: 'utf-8',
-      });
-      return logs.split('\n').filter((line) => line.trim());
-    } catch (error) {
-      console.error('[v0] Log retrieval failed:', error);
-      return [];
+    // Get Unbound cache statistics
+    async getCacheStats(): Promise<{ hits: number; misses: number }> {
+        try {
+            const status = await this.getStatus()
+            return {
+                hits: parseInt(status?.['total.cachehits'] || '0'),
+                misses: parseInt(status?.['total.cachemiss'] || '0'),
+            }
+        } catch (error) {
+            console.error('[v0] Cache stats retrieval failed:', error)
+            return { hits: 0, misses: 0 }
+        }
     }
-  }
+
+    // Parse unbound-control stats output
+    private parseStats(stats: string): Record<string, string> {
+        const result: Record<string, string> = {}
+        stats.split('\n').forEach((line) => {
+            const [key, value] = line.split('=')
+            if (key && value) {
+                result[key.trim()] = value.trim()
+            }
+        })
+        return result
+    }
+
+    // Monitor Unbound logs for queries (optional)
+    async getTailLogs(lines: number = 50): Promise<string[]> {
+        try {
+            const logs = execSync(`tail -n ${lines} ${this.logFile}`, {
+                encoding: 'utf-8',
+            })
+            return logs.split('\n').filter((line) => line.trim())
+        } catch (error) {
+            console.error('[v0] Log retrieval failed:', error)
+            return []
+        }
+    }
 }
 ```
 
@@ -338,9 +339,9 @@ sudo systemctl start unbound
 sudo systemctl status unbound
 ```
 
-## Monitoring & Logging
+## Logging
 
-### Enable Unbound Metrics (Prometheus)
+### Enable Unbound Metrics
 
 Add to `unbound.conf`:
 
@@ -474,5 +475,5 @@ grep -A2 "forward-zone:" /etc/unbound/unbound.conf
 1. Set up both Unbound and CoreDNS
 2. Configure the GCOT Policy Agent to manage both services
 3. Deploy Node.js agent to run policy sync loop
-4. Monitor via Prometheus and Grafana dashboards
+4. Monitor performance and logs through your preferred dashboard or log tools
 5. Test blocking/allowing domains through the GCOT dashboard

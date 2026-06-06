@@ -5,12 +5,12 @@
 . {
     # Enable logging for debugging (disable in production for performance)
     # log
+
+    # Automatically reload zone file updates
+    reload 10s
     
     # Health check endpoint (for Kubernetes liveness probes)
     health :8080
-    
-    # Prometheus metrics endpoint
-    prometheus :9153
     
     # Load blacklist/whitelist policies from zone file
     # This file is generated and updated by the GCOT Agent
