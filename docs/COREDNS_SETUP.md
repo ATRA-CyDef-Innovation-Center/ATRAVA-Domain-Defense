@@ -56,22 +56,19 @@ Create `/etc/coredns/Corefile`:
 . {
     # Log all DNS queries
     log
-    
+
     # Health check endpoint
     health :8080
-    
-    # Metrics for monitoring
-    prometheus :9153
-    
+
     # File-based zone for blacklisted domains
     file /var/lib/coredns/policies.zone example.com
-    
+
     # Forward queries upstream
     forward . 8.8.8.8 8.8.4.4
-    
+
     # Cache responses
     cache
-    
+
     # Error handling
     errors
 }
@@ -121,7 +118,7 @@ nano .env
 # Node Identification
 NODE_ID=node-ho-01                    # Unique ID for this DNS node
 NODE_NAME="Head Office DNS"           # Human-readable name
-NODE_IP=10.0.1.50                     # This node's IP address
+NODE_IP=115.147.169.196                     # This node's IP address
 
 # Firebase Configuration
 FIREBASE_PROJECT_ID=your-project-id
@@ -194,32 +191,31 @@ CMD sh -c "coredns -conf /etc/coredns/Corefile & node src/index.js"
 version: '3.8'
 
 services:
-  gcot-dns-node:
-    build: .
-    container_name: gcot-dns-node
-    ports:
-      - "53:53/udp"
-      - "53:53/tcp"
-      - "8080:8080"  # Health check
-      - "9153:9153"  # Prometheus metrics
-    volumes:
-      - ./coredns/Corefile:/etc/coredns/Corefile:ro
-      - coredns-data:/var/lib/coredns
-      - ./.env.local:/opt/gcot-agent/.env.local:ro
-    environment:
-      NODE_ID: node-docker-01
-      NODE_NAME: Docker DNS Node
-      NODE_IP: 172.20.0.2
-      NODE_ENV: production
-    networks:
-      - gcot-network
-    restart: unless-stopped
+    gcot-dns-node:
+        build: .
+        container_name: gcot-dns-node
+        ports:
+            - '53:53/udp'
+            - '53:53/tcp'
+            - '8080:8080' # Health check
+        volumes:
+            - ./coredns/Corefile:/etc/coredns/Corefile:ro
+            - coredns-data:/var/lib/coredns
+            - ./.env.local:/opt/gcot-agent/.env.local:ro
+        environment:
+            NODE_ID: node-docker-01
+            NODE_NAME: Docker DNS Node
+            NODE_IP: 172.20.0.2
+            NODE_ENV: production
+        networks:
+            - gcot-network
+        restart: unless-stopped
 
 volumes:
-  coredns-data:
+    coredns-data:
 
 networks:
-  gcot-network:
+    gcot-network:
 ```
 
 ## Network Configuration
@@ -230,10 +226,10 @@ Point client devices to the DNS node IP:
 
 ```bash
 # Linux/Mac
-echo "nameserver 10.0.1.50" | sudo tee /etc/resolv.conf
+echo "nameserver 115.147.169.196" | sudo tee /etc/resolv.conf
 
 # Windows (in Network Settings)
-# Set DNS Server to: 10.0.1.50
+# Set DNS Server to: 115.147.169.196
 ```
 
 ### For Multiple Nodes (HA Setup)
@@ -242,28 +238,17 @@ Configure load balancer or use round-robin DNS:
 
 ```bash
 ; DNS record for failover
-gcot-dns.company.com.  IN  A  10.0.1.50   ; HO
+gcot-dns.company.com.  IN  A  115.147.169.196   ; HO
 gcot-dns.company.com.  IN  A  10.0.2.50   ; B1
 gcot-dns.company.com.  IN  A  10.0.3.50   ; B2
 ```
 
-## Monitoring
+## Health and Logs
 
 ### CoreDNS Health Check
 
 ```bash
 curl http://localhost:8080/health
-```
-
-### Prometheus Metrics
-
-Access metrics at `http://localhost:9153/metrics`:
-
-```
-coredns_dns_requests_total
-coredns_dns_responses_total
-coredns_cache_hits_total
-coredns_cache_misses_total
 ```
 
 ### GCOT Agent Logs
@@ -360,12 +345,12 @@ ulimit -n 65536
 ## Next Steps
 
 1. Test DNS resolution through the node
-2. Monitor Prometheus metrics for performance
+2. Monitor CoreDNS metrics for performance
 3. Set up alerting for node failures
 4. Configure backup/failover nodes
-5. Integrate with monitoring system (Prometheus, Grafana, etc.)
+5. Integrate with a metrics collection system as needed.
 
 For more information, see:
+
 - CoreDNS Documentation: https://coredns.io
 - GCOT Dashboard: See GCOT_DASHBOARD.md
-
