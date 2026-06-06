@@ -9,58 +9,58 @@
 ### Core Documentation
 
 1. **[GCOT_README.md](./GCOT_README.md)** (363 lines)
-   - Project overview and architecture
-   - Feature list
-   - Quick start guide
-   - API documentation
-   - Configuration and monitoring
-   - Troubleshooting guide
-   - **Read this first**
+    - Project overview and architecture
+    - Feature list
+    - Quick start guide
+    - API documentation
+    - Configuration and monitoring
+    - Troubleshooting guide
+    - **Read this first**
 
 2. **[GCOT_BUILD_SUMMARY.md](./GCOT_BUILD_SUMMARY.md)** (443 lines)
-   - Complete build status and completion checklist
-   - Detailed file structure and code organization
-   - What was built in each component
-   - Setup instructions for each part
-   - Testing and verification details
-   - Performance metrics
-   - Known limitations and future enhancements
-   - **Read this to understand what was delivered**
+    - Complete build status and completion checklist
+    - Detailed file structure and code organization
+    - What was built in each component
+    - Setup instructions for each part
+    - Testing and verification details
+    - Performance metrics
+    - Known limitations and future enhancements
+    - **Read this to understand what was delivered**
 
 3. **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** (384 lines)
-   - Step-by-step deployment guide
-   - Pre-deployment checklist
-   - Phase-by-phase deployment (10 phases)
-   - Testing verification at each stage
-   - Rollback procedures
-   - Troubleshooting flowchart
-   - Success criteria and sign-off
-   - **Use this to deploy the system**
+    - Step-by-step deployment guide
+    - Pre-deployment checklist
+    - Phase-by-phase deployment (10 phases)
+    - Testing verification at each stage
+    - Rollback procedures
+    - Troubleshooting flowchart
+    - Success criteria and sign-off
+    - **Use this to deploy the system**
 
 ### Setup Guides
 
 4. **[FIRESTORE_SETUP.md](./FIRESTORE_SETUP.md)** (212 lines)
-   - Firebase and Firestore configuration
-   - Database schema definition
-   - Required indexes
-   - Security rules configuration
-   - Initial data setup
-   - Firestore utilities documentation
-   - Troubleshooting Firebase issues
-   - **Use this to set up Firebase**
+    - Firebase and Firestore configuration
+    - Database schema definition
+    - Required indexes
+    - Security rules configuration
+    - Initial data setup
+    - Firestore utilities documentation
+    - Troubleshooting Firebase issues
+    - **Use this to set up Firebase**
 
 5. **[COREDNS_SETUP.md](./COREDNS_SETUP.md)** (371 lines)
-   - CoreDNS installation methods (Docker, Linux)
-   - Corefile configuration options
-   - Policy zone file format
-   - DNS Policy Agent setup and configuration
-   - Docker Compose deployment
-   - Network configuration for HA
-   - Monitoring with Prometheus/Grafana
-   - Security best practices
-   - Performance tuning
-   - Troubleshooting DNS issues
-   - **Use this to set up CoreDNS nodes**
+    - CoreDNS installation methods (Docker, Linux)
+    - Corefile configuration options
+    - Policy zone file format
+    - DNS Policy Agent setup and configuration
+    - Docker Compose deployment
+    - Network configuration for HA
+    - Metrics and observability
+    - Security best practices
+    - Performance tuning
+    - Troubleshooting DNS issues
+    - **Use this to set up CoreDNS nodes**
 
 ## Directory Structure
 
@@ -127,23 +127,27 @@
 ## Document Reading Guide
 
 ### For Project Managers
+
 1. **[GCOT_README.md](./GCOT_README.md)** - Overview and features
 2. **[GCOT_BUILD_SUMMARY.md](./GCOT_BUILD_SUMMARY.md)** - What was delivered
 3. **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** - Deployment timeline
 
 ### For Frontend Developers
+
 1. **[GCOT_README.md](./GCOT_README.md)** - Architecture overview
 2. **src/app/** directory - React/Next.js pages
 3. **src/components/** directory - Reusable components
 4. **src/lib/firebase.js** - Firebase integration
 
 ### For Backend/DevOps Engineers
+
 1. **[FIRESTORE_SETUP.md](./FIRESTORE_SETUP.md)** - Database setup
 2. **functions/** directory - Cloud Functions code
 3. **[COREDNS_SETUP.md](./COREDNS_SETUP.md)** - DNS node deployment
 4. **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** - Deployment steps
 
 ### For System Administrators
+
 1. **[COREDNS_SETUP.md](./COREDNS_SETUP.md)** - Node setup and configuration
 2. **agent/** directory - Agent installation
 3. **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** - Deployment guide
@@ -152,17 +156,20 @@
 ## Key Files by Function
 
 ### Configuration Files
+
 - `agent/.env.example` - Agent environment template
 - `coredns/Corefile` - CoreDNS configuration
 - `deployment/docker-compose.yml` - Full stack deployment
 - `.env.example` (create from template) - Application configuration
 
 ### Source Code
+
 - **Frontend**: `src/app/**`, `src/components/**`, `src/hooks/**`, `src/lib/**`
 - **Cloud Functions**: `functions/src/**`
 - **DNS Agent**: `agent/src/**`
 
 ### Documentation
+
 - **Getting Started**: GCOT_README.md
 - **What Was Built**: GCOT_BUILD_SUMMARY.md
 - **Deployment**: DEPLOYMENT_CHECKLIST.md
@@ -173,25 +180,33 @@
 ## Common Tasks
 
 ### "I need to deploy GCOT"
+
 → Follow **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** step by step
 
 ### "I need to understand the architecture"
+
 → Read **[GCOT_README.md](./GCOT_README.md)** Architecture section
 
 ### "I need to set up Firebase"
+
 → Follow **[FIRESTORE_SETUP.md](./FIRESTORE_SETUP.md)**
 
 ### "I need to set up a DNS node"
+
 → Follow **[COREDNS_SETUP.md](./COREDNS_SETUP.md)**
 
 ### "I need to understand what was built"
+
 → Read **[GCOT_BUILD_SUMMARY.md](./GCOT_BUILD_SUMMARY.md)**
 
 ### "I need API documentation"
+
 → See **[GCOT_README.md](./GCOT_README.md)** API Documentation section
 
 ### "I need to troubleshoot an issue"
+
 → Check Troubleshooting sections in:
+
 - [GCOT_README.md](./GCOT_README.md) - General troubleshooting
 - [FIRESTORE_SETUP.md](./FIRESTORE_SETUP.md) - Firebase issues
 - [COREDNS_SETUP.md](./COREDNS_SETUP.md) - DNS/CoreDNS issues
@@ -199,18 +214,19 @@
 
 ## File Sizes (for reference)
 
-| Document | Lines | Purpose |
-|----------|-------|---------|
-| GCOT_README.md | 363 | Main documentation |
-| GCOT_BUILD_SUMMARY.md | 443 | Completion status |
-| DEPLOYMENT_CHECKLIST.md | 384 | Step-by-step deployment |
-| FIRESTORE_SETUP.md | 212 | Database configuration |
-| COREDNS_SETUP.md | 371 | DNS node setup |
-| **Total Documentation** | **1,773** | Complete reference |
+| Document                | Lines     | Purpose                 |
+| ----------------------- | --------- | ----------------------- |
+| GCOT_README.md          | 363       | Main documentation      |
+| GCOT_BUILD_SUMMARY.md   | 443       | Completion status       |
+| DEPLOYMENT_CHECKLIST.md | 384       | Step-by-step deployment |
+| FIRESTORE_SETUP.md      | 212       | Database configuration  |
+| COREDNS_SETUP.md        | 371       | DNS node setup          |
+| **Total Documentation** | **1,773** | Complete reference      |
 
 ## Quick Links
 
 ### External Resources
+
 - [Firebase Documentation](https://firebase.google.com/docs)
 - [Firestore Documentation](https://cloud.google.com/firestore/docs)
 - [CoreDNS Documentation](https://coredns.io)
@@ -221,21 +237,25 @@
 ### Example Commands
 
 **Deploy Frontend**
+
 ```bash
 pnpm install && pnpm build && pnpm dev
 ```
 
 **Deploy Cloud Functions**
+
 ```bash
 cd functions && npm install && firebase deploy --only functions
 ```
 
 **Deploy DNS Agent**
+
 ```bash
 cd agent && npm install && cp .env.example .env && npm start
 ```
 
 **Deploy Full Stack (Docker)**
+
 ```bash
 docker-compose -f deployment/docker-compose.yml up -d
 ```
@@ -258,4 +278,3 @@ If you encounter issues:
 ---
 
 **Next Step**: Read [GCOT_README.md](./GCOT_README.md) to get started!
-
