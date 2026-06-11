@@ -10,8 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { db } from '@/lib/firebase';
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Activity, Globe, Server, ShieldAlert } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Activity, Database, Globe, Server, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 function normalizeDate(value) {
   if (!value) return null;
@@ -24,6 +24,19 @@ function parsePercent(value) {
   if (typeof value === 'number') return value;
   const numeric = Number.parseFloat(String(value || '0').replace('%', ''));
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function nodeQueryCount(node) {
+  return Math.max(
+    Number(node.unboundQueries || 0),
+    Number(node.queriesPerDay || 0),
+    Number(node.sampledQueries || 0),
+    Number(node.blockedQueries || 0)
+  );
+}
+
+function nodeBlockedCount(node) {
+  return Number(node.blockedQueries || 0);
 }
 
 function relativeTime(value) {
@@ -63,17 +76,18 @@ export default function DashboardPage() {
   }, []);
 
   const dashboardStats = useMemo(() => {
-    const totalQueries = nodes.reduce((sum, node) => sum + Number(node.queriesPerDay || 0), 0);
-    const blockedQueries = nodes.reduce((sum, node) => {
-      if (node.blockedQueries !== undefined) {
-        return sum + Number(node.blockedQueries || 0);
-      }
-      const queries = Number(node.queriesPerDay || 0);
-      const blockRate = parsePercent(node.blockRate) / 100;
-      return sum + queries * blockRate;
-    }, 0);
-    const blockRate = totalQueries > 0 ? (blockedQueries / totalQueries) * 100 : 0;
+    const totalQueries = nodes.reduce((sum, node) => sum + nodeQueryCount(node), 0);
+    const blockedQueries = nodes.reduce((sum, node) => sum + nodeBlockedCount(node), 0);
+    const sampledQueries = nodes.reduce((sum, node) => sum + Number(node.sampledQueries || 0), 0);
+    const rateDenominator = sampledQueries || totalQueries;
+    const blockRate = rateDenominator > 0 ? (blockedQueries / rateDenominator) * 100 : 0;
     const onlineNodes = nodes.filter((node) => node.status === 'online').length;
+    const cacheHitRates = nodes
+      .map((node) => Number(node.unboundCacheHitRate || 0))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const avgCacheHitRate = cacheHitRates.length
+      ? cacheHitRates.reduce((sum, value) => sum + value, 0) / cacheHitRates.length
+      : 0;
 
     return [
       {
@@ -91,6 +105,13 @@ export default function DashboardPage() {
         color: 'text-red-500',
       },
       {
+        title: 'Active Blacklist',
+        value: blacklistEntries.length.toLocaleString(),
+        description: 'Domains currently enforced',
+        icon: ShieldCheck,
+        color: 'text-emerald-500',
+      },
+      {
         title: 'Fleet Block Rate',
         value: `${blockRate.toFixed(1)}%`,
         description: 'Across all reporting nodes',
@@ -104,8 +125,42 @@ export default function DashboardPage() {
         icon: Server,
         color: 'text-cyan-500',
       },
+      {
+        title: 'Cache Hit Rate',
+        value: `${avgCacheHitRate.toFixed(1)}%`,
+        description: 'Average across reporting nodes',
+        icon: Database,
+        color: 'text-violet-500',
+      },
     ];
+  }, [blacklistEntries.length, nodes]);
+
+  const queryMixData = useMemo(() => {
+    const totalQueries = nodes.reduce((sum, node) => sum + nodeQueryCount(node), 0);
+    const blockedQueries = nodes.reduce((sum, node) => sum + nodeBlockedCount(node), 0);
+    const allowedQueries = Math.max(totalQueries - blockedQueries, 0);
+
+    return [
+      { name: 'Allowed', value: allowedQueries, color: '#22c55e' },
+      { name: 'Blocked', value: blockedQueries, color: '#ef4444' },
+    ].filter((item) => item.value > 0);
   }, [nodes]);
+
+  const nodeHealthData = useMemo(
+    () =>
+      [...nodes]
+        .map((node) => ({
+          name: node.name || node.nodeId || node.id,
+          queries: nodeQueryCount(node),
+          blocked: nodeBlockedCount(node),
+          blockRate: parsePercent(node.blockRate),
+          cacheHitRate: Number(node.unboundCacheHitRate || 0),
+          status: node.status || 'unknown',
+          lastSeen: normalizeDate(node.lastHealthCheck || node.lastSync),
+        }))
+        .sort((a, b) => b.queries - a.queries),
+    [nodes]
+  );
 
   const policyActivityData = useMemo(() => {
     const now = Date.now();
@@ -177,7 +232,7 @@ export default function DashboardPage() {
               {userProfile && <p className="mt-2 text-sm text-primary">Signed in as {ROLE_LABELS[userProfile.role]}</p>}
             </div>
 
-            <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
               {dashboardStats.map((stat) => {
                 const Icon = stat.icon;
                 return (
@@ -195,6 +250,117 @@ export default function DashboardPage() {
                   </Card>
                 );
               })}
+            </div>
+
+            <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle>DNS Decisions</CardTitle>
+                  <CardDescription>Allowed vs blocked traffic reported by nodes</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {queryMixData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart>
+                        <Pie
+                          data={queryMixData}
+                          dataKey="value"
+                          nameKey="name"
+                          innerRadius={64}
+                          outerRadius={92}
+                          paddingAngle={4}
+                        >
+                          {queryMixData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333' }} labelStyle={{ color: '#fff' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <Empty className="min-h-[240px] border border-dashed border-border bg-secondary/40">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <Activity />
+                        </EmptyMedia>
+                        <EmptyTitle>No DNS traffic yet</EmptyTitle>
+                        <EmptyDescription>
+                          Query decisions will appear after clients use the GCOT node.
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    {queryMixData.map((item) => (
+                      <div key={item.name} className="rounded-lg border border-border bg-secondary p-3">
+                        <div className="mb-1 flex items-center gap-2 text-muted-foreground">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                          {item.name}
+                        </div>
+                        <div className="font-semibold text-foreground">{item.value.toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-card lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Node Telemetry</CardTitle>
+                  <CardDescription>Live resolver activity and enforcement health</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {nodeHealthData.length > 0 ? (
+                    <div className="space-y-3">
+                      {nodeHealthData.map((node) => (
+                        <div key={node.name} className="rounded-lg border border-border bg-secondary p-4">
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-medium text-foreground">{node.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Last seen {node.lastSeen ? relativeTime(node.lastSeen) : 'Unknown'}
+                              </p>
+                            </div>
+                            <Badge className={node.status === 'online' ? 'bg-green-900 text-green-100' : 'bg-yellow-900 text-yellow-100'}>
+                              {String(node.status).toUpperCase()}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Queries</p>
+                              <p className="font-semibold text-foreground">{node.queries.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Blocked</p>
+                              <p className="font-semibold text-foreground">{node.blocked.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Block Rate</p>
+                              <p className="font-semibold text-foreground">{node.blockRate.toFixed(1)}%</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Cache Hit</p>
+                              <p className="font-semibold text-foreground">{node.cacheHitRate.toFixed(1)}%</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty className="min-h-[240px] border border-dashed border-border bg-secondary/40">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <Server />
+                        </EmptyMedia>
+                        <EmptyTitle>No node telemetry yet</EmptyTitle>
+                        <EmptyDescription>
+                          Resolver statistics will appear after the agent reports health.
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                </CardContent>
+              </Card>
             </div>
 
             <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">

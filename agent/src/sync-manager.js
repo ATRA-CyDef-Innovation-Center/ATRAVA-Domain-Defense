@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PolicySyncManager = void 0;
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const child_process_1 = require("child_process");
 class PolicySyncManager {
     constructor(db, nodeId, coreDnsConfigPath, policyCache) {
         this.lastSyncVersion = '';
@@ -143,9 +144,15 @@ class PolicySyncManager {
             fs.writeFileSync(zoneFilePath, zoneContent);
             console.log('[v0] CoreDNS configuration updated');
             console.log(`[v0] Zone file written to: ${zoneFilePath}`);
-            // In production, reload CoreDNS with: systemctl reload coredns or send SIGHUP
-            // For now, just log that it would be reloaded
-            console.log('[v0] (Would reload CoreDNS in production)');
+            try {
+                (0, child_process_1.execSync)('unbound-control flush_zone .', {
+                    stdio: ['ignore', 'ignore', 'pipe'],
+                });
+                console.log('[v0] Unbound cache flushed after policy update');
+            }
+            catch (flushError) {
+                console.error('[v0] Failed to flush Unbound cache after policy update:', flushError);
+            }
         }
         catch (error) {
             console.error('[v0] Error updating CoreDNS config:', error);

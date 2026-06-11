@@ -37,6 +37,15 @@ function parsePercent(value) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function nodeQueryCount(node) {
+  return Math.max(
+    Number(node.unboundQueries || 0),
+    Number(node.queriesPerDay || 0),
+    Number(node.sampledQueries || 0),
+    Number(node.blockedQueries || 0)
+  );
+}
+
 export default function NodesPage() {
   const router = useRouter();
   const { userProfile } = useAuth();
@@ -141,6 +150,7 @@ export default function NodesPage() {
               {sortedNodes.length > 0 ? (
                 sortedNodes.map((node) => {
                   const blockRate = parsePercent(node.blockRate);
+                  const queries = nodeQueryCount(node);
                   const coreDnsStatus = node.corednsStatus || node.status || 'unknown';
                   const unboundStatus = node.unboundStatus || 'unknown';
 
@@ -177,7 +187,7 @@ export default function NodesPage() {
                           </div>
                           <div className="rounded-lg border border-border bg-secondary p-3">
                             <p className="mb-1 text-xs text-muted-foreground">Queries Today</p>
-                            <p className="font-semibold text-foreground">{Number(node.queriesPerDay || 0).toLocaleString()}</p>
+                            <p className="font-semibold text-foreground">{queries.toLocaleString()}</p>
                           </div>
                           <div className="rounded-lg border border-border bg-secondary p-3">
                             <p className="mb-1 text-xs text-muted-foreground">Block Rate</p>
