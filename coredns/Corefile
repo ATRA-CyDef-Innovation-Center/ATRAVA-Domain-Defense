@@ -44,9 +44,7 @@
     }
     
     # Error handling and fallback
-    errors {
-        log
-    }
+    # The errors plugin block is omitted for compatibility with this CoreDNS build.
     
     # Rate limiting (optional, uncomment to enable)
     # ratelimit . 100
