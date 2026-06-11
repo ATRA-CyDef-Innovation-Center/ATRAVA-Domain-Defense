@@ -12,16 +12,19 @@ cat > /var/lib/coredns/policies.zone <<'EOF'
 # GCOT policy hosts file
 EOF
 
-if [ ! -f /etc/unbound/unbound_control.key ] || [ ! -f /etc/unbound/unbound_control.pem ] || [ ! -f /etc/unbound/unbound_server.key ] || [ ! -f /etc/unbound/unbound_server.pem ]; then
-  echo "[entrypoint] Generating Unbound control keys..."
-  (cd /etc/unbound && unbound-control-setup) || true
-fi
+echo "[entrypoint] Checking Unbound configuration..."
+unbound-checkconf /etc/unbound/unbound.conf
 
 echo "[entrypoint] Starting Unbound..."
-unbound -c /etc/unbound/unbound.conf &
+unbound -d -c /etc/unbound/unbound.conf &
 UNBOUND_PID=$!
 
 for i in 1 2 3 4 5; do
+  if ! kill -0 "$UNBOUND_PID" 2>/dev/null; then
+    echo "[entrypoint] Unbound exited before the control interface became ready"
+    wait "$UNBOUND_PID"
+    exit 1
+  fi
   if unbound-control status >/dev/null 2>&1; then
     echo "[entrypoint] Unbound control interface ready"
     break
@@ -31,7 +34,8 @@ for i in 1 2 3 4 5; do
 done
 
 if ! unbound-control status >/dev/null 2>&1; then
-  echo "[entrypoint] Warning: Unbound control interface did not become ready"
+  echo "[entrypoint] Error: Unbound control interface did not become ready"
+  exit 1
 fi
 
 echo "[entrypoint] Starting CoreDNS..."
