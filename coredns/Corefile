@@ -15,8 +15,7 @@
     # Load blacklist/whitelist policies from zone file
     # This file is generated and updated by the GCOT Agent
     file /var/lib/coredns/policies.zone {
-        # Return NXDOMAIN for blocked domains (domain doesn't exist)
-        except google.com github.com microsoft.com  # Exception example
+        # Policy directives are managed by the GCOT agent.
     }
     
     # Forward all other queries to upstream DNS servers
