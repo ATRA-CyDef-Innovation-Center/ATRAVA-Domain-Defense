@@ -100,6 +100,34 @@ docker compose ps
 docker compose logs -f gcot-node
 ```
 
+> If the container fails to start with `address already in use` on port 53, another DNS service is already bound to that port on the host.
+>
+> Check what is using port 53:
+>
+> ```bash
+> sudo ss -tulpn | grep ':53'
+> ```
+>
+> Common blockers on Ubuntu are `systemd-resolved`, `bind9`, or another DNS server. Stop the conflicting service before retrying:
+>
+> ```bash
+> sudo systemctl stop systemd-resolved
+> sudo systemctl disable systemd-resolved
+> sudo systemctl stop bind9
+> ```
+>
+> If DNS resolution fails after stopping `systemd-resolved`, update `/etc/resolv.conf` to use a public resolver while building the container:
+>
+> ```bash
+> echo -e "nameserver 1.1.1.1\nnameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+> ```
+>
+> Then retry:
+>
+> ```bash
+> docker compose up -d --build
+> ```
+
 Expected output in logs:
 
 ```
