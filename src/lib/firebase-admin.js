@@ -8,6 +8,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 import * as admin from 'firebase-admin';
+import { config as loadDotenv } from 'dotenv';
 // ---------------------------------------------------------------------------
 // Firebase Admin SDK — singleton initializer
 // Returns null if credentials are not configured / are placeholders.
@@ -18,34 +19,62 @@ const PLACEHOLDER_MARKERS = [
     'YOUR_',
     '-----BEGIN RSA', // bare placeholder text (not real key)
 ];
+let loadedFallbackEnv = false;
+function loadFallbackAdminEnv() {
+    if (loadedFallbackEnv)
+        return;
+    loadedFallbackEnv = true;
+    if (process.env.FIREBASE_ADMIN_CLIENT_EMAIL || process.env.FIREBASE_CLIENT_EMAIL)
+        return;
+    loadDotenv({ path: `${process.cwd()}/agent/.env.local`, override: false });
+}
 function isPlaceholder(value) {
     return PLACEHOLDER_MARKERS.some((marker) => value.toUpperCase().includes(marker.toUpperCase()));
 }
-function tryGetAdminApp() {
+export function tryGetAdminApp() {
     var _a, _b, _c;
     if (admin.apps.length > 0)
         return admin.apps[0];
-    const projectId = (_a = process.env.FIREBASE_ADMIN_PROJECT_ID) !== null && _a !== void 0 ? _a : '';
-    const clientEmail = (_b = process.env.FIREBASE_ADMIN_CLIENT_EMAIL) !== null && _b !== void 0 ? _b : '';
-    const rawPrivateKey = (_c = process.env.FIREBASE_ADMIN_PRIVATE_KEY) !== null && _c !== void 0 ? _c : '';
-    // If any credential is missing or is a placeholder, skip Admin SDK
-    if (!projectId ||
-        !clientEmail ||
-        !rawPrivateKey ||
-        isPlaceholder(clientEmail) ||
-        isPlaceholder(rawPrivateKey)) {
-        return null;
+    loadFallbackAdminEnv();
+    const projectId = (_a = process.env.FIREBASE_ADMIN_PROJECT_ID) !== null && _a !== void 0 ? _a : process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
+    const clientEmail = (_b = process.env.FIREBASE_ADMIN_CLIENT_EMAIL) !== null && _b !== void 0 ? _b : process.env.FIREBASE_CLIENT_EMAIL || '';
+    const rawPrivateKey = (_c = process.env.FIREBASE_ADMIN_PRIVATE_KEY) !== null && _c !== void 0 ? _c : process.env.FIREBASE_PRIVATE_KEY || '';
+    const hasServiceAccount = projectId &&
+        clientEmail &&
+        rawPrivateKey &&
+        !isPlaceholder(clientEmail) &&
+        !isPlaceholder(rawPrivateKey);
+    if (hasServiceAccount) {
+        const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
+        try {
+            return admin.initializeApp({
+                credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+                projectId,
+            });
+        }
+        catch (_d) {
+            return null;
+        }
     }
-    const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
-    try {
-        return admin.initializeApp({
-            credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-            projectId,
-        });
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.NODE_ENV === 'production') {
+        try {
+            return admin.initializeApp({
+                credential: admin.credential.applicationDefault(),
+                projectId: projectId || undefined,
+            });
+        }
+        catch (_e) {
+            return null;
+        }
     }
-    catch (_d) {
-        return null;
+    return null;
+}
+export function getAdminFirestore() {
+    const app = tryGetAdminApp();
+    if (!app) {
+        throw new Error('firebase_admin_not_configured');
     }
+    return admin.firestore(app);
 }
 // ---------------------------------------------------------------------------
 // Strategy 1: Firebase Admin SDK (preferred, requires service account)

@@ -88,6 +88,12 @@ export function POST(request) {
         catch (err) {
             const reason = err instanceof Error ? err.message : 'internal_error';
             console.error('[/api/auth/login]', reason, err);
+            if (reason === 'firebase_admin_not_configured') {
+                return NextResponse.json({
+                    message: 'Firebase Admin SDK is not configured. Add service account credentials to the server environment.',
+                    reason,
+                }, { status: 500 });
+            }
             return NextResponse.json({ message: 'Unable to process login request.', reason }, { status: 500 });
         }
     });

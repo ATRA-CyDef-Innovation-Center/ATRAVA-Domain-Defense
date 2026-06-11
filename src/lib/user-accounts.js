@@ -7,9 +7,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where, serverTimestamp, Timestamp, } from 'firebase/firestore';
 import { randomBytes } from 'crypto';
-import { db } from '@/lib/firebase';
+import * as admin from 'firebase-admin';
+import { getAdminFirestore } from '@/lib/firebase-admin';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -19,7 +19,7 @@ function generateToken() {
 function toIso(val) {
     if (!val)
         return null;
-    if (val instanceof Timestamp)
+    if (typeof (val === null || val === void 0 ? void 0 : val.toDate) === 'function')
         return val.toDate().toISOString();
     if (val instanceof Date)
         return val.toISOString();
@@ -59,10 +59,9 @@ function normalizeInvite(id, data) {
 // ---------------------------------------------------------------------------
 export function getLoginAccount(email) {
     return __awaiter(this, void 0, void 0, function* () {
+        const db = getAdminFirestore();
         const normalized = email.toLowerCase().trim();
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', normalized));
-        const snap = yield getDocs(q);
+        const snap = yield db.collection('users').where('email', '==', normalized).get();
         if (snap.empty)
             return null;
         const docSnap = snap.docs[0];
@@ -74,7 +73,8 @@ export function getLoginAccount(email) {
 // ---------------------------------------------------------------------------
 export function listUserAccounts() {
     return __awaiter(this, void 0, void 0, function* () {
-        const snap = yield getDocs(collection(db, 'users'));
+        const db = getAdminFirestore();
+        const snap = yield db.collection('users').get();
         return snap.docs.map((d) => normalizeUser(d.id, d.data()));
     });
 }
@@ -83,13 +83,12 @@ export function listUserAccounts() {
 // ---------------------------------------------------------------------------
 export function markUserLogin(email) {
     return __awaiter(this, void 0, void 0, function* () {
+        const db = getAdminFirestore();
         const normalized = email.toLowerCase().trim();
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('email', '==', normalized));
-        const snap = yield getDocs(q);
+        const snap = yield db.collection('users').where('email', '==', normalized).get();
         if (snap.empty)
             return;
-        yield updateDoc(snap.docs[0].ref, { lastLoginAt: serverTimestamp() });
+        yield snap.docs[0].ref.update({ lastLoginAt: admin.firestore.FieldValue.serverTimestamp() });
     });
 }
 // ---------------------------------------------------------------------------
@@ -98,6 +97,7 @@ export function markUserLogin(email) {
 export function inviteUserAccount(_a) {
     return __awaiter(this, arguments, void 0, function* ({ email, role, invitedBy, }) {
         var _b;
+        const db = getAdminFirestore();
         const normalizedEmail = email.toLowerCase().trim();
         if (!normalizedEmail || !normalizedEmail.includes('@')) {
             throw new Error('invalid_email');
@@ -107,9 +107,8 @@ export function inviteUserAccount(_a) {
             throw new Error('invalid_role');
         }
         // Check for existing user
-        const usersRef = collection(db, 'users');
-        const existingQ = query(usersRef, where('email', '==', normalizedEmail));
-        const existingSnap = yield getDocs(existingQ);
+        const usersRef = db.collection('users');
+        const existingSnap = yield usersRef.where('email', '==', normalizedEmail).get();
         let userId;
         let userData;
         if (!existingSnap.empty) {
@@ -123,7 +122,7 @@ export function inviteUserAccount(_a) {
         }
         else {
             // Create new user doc
-            userId = doc(usersRef).id;
+            userId = usersRef.doc().id;
             const newUserData = {
                 uid: userId,
                 email: normalizedEmail,
@@ -132,29 +131,30 @@ export function inviteUserAccount(_a) {
                 status: 'pending',
                 source: 'invite',
                 emailVerifiedAt: null,
-                createdAt: serverTimestamp(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 lastLoginAt: null,
                 invitedBy,
             };
-            yield setDoc(doc(db, 'users', userId), newUserData);
+            yield usersRef.doc(userId).set(newUserData);
             userData = normalizeUser(userId, Object.assign(Object.assign({}, newUserData), { createdAt: new Date(), status: 'pending' }));
         }
         // Create invite doc
         const token = generateToken();
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        const inviteId = doc(collection(db, 'invites')).id;
+        const inviteRef = db.collection('invites').doc();
+        const inviteId = inviteRef.id;
         const inviteData = {
             id: inviteId,
             email: normalizedEmail,
             userId,
             role,
             invitedBy,
-            invitedAt: serverTimestamp(),
-            expiresAt: Timestamp.fromDate(expiresAt),
+            invitedAt: admin.firestore.FieldValue.serverTimestamp(),
+            expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
             status: 'pending',
             token,
         };
-        yield setDoc(doc(db, 'invites', inviteId), inviteData);
+        yield inviteRef.set(inviteData);
         const invite = normalizeInvite(inviteId, Object.assign(Object.assign({}, inviteData), { invitedAt: new Date(), expiresAt }));
         return { user: userData, invite };
     });
@@ -166,16 +166,15 @@ export function getInviteForEmailVerification(token) {
     return __awaiter(this, void 0, void 0, function* () {
         if (!token)
             return null;
-        const invitesRef = collection(db, 'invites');
-        const q = query(invitesRef, where('token', '==', token));
-        const snap = yield getDocs(q);
+        const db = getAdminFirestore();
+        const snap = yield db.collection('invites').where('token', '==', token).get();
         if (snap.empty)
             return null;
         const inviteDoc = snap.docs[0];
         const invite = normalizeInvite(inviteDoc.id, inviteDoc.data());
         // Auto-expire check
         if (invite.status === 'pending' && new Date(invite.expiresAt) < new Date()) {
-            yield updateDoc(inviteDoc.ref, { status: 'expired' });
+            yield inviteDoc.ref.update({ status: 'expired' });
             return Object.assign(Object.assign({}, invite), { status: 'expired' });
         }
         if (invite.status === 'verified') {
@@ -191,9 +190,8 @@ export function verifyInviteEmail(_a) {
     return __awaiter(this, arguments, void 0, function* ({ token, }) {
         if (!token)
             throw new Error('invalid_invite_token');
-        const invitesRef = collection(db, 'invites');
-        const q = query(invitesRef, where('token', '==', token));
-        const snap = yield getDocs(q);
+        const db = getAdminFirestore();
+        const snap = yield db.collection('invites').where('token', '==', token).get();
         if (snap.empty)
             throw new Error('invite_not_found');
         const inviteDoc = snap.docs[0];
@@ -202,21 +200,20 @@ export function verifyInviteEmail(_a) {
             throw new Error('invite_already_verified');
         }
         if (invite.status === 'expired' || new Date(invite.expiresAt) < new Date()) {
-            yield updateDoc(inviteDoc.ref, { status: 'expired' });
+            yield inviteDoc.ref.update({ status: 'expired' });
             throw new Error('invite_expired');
         }
         if (invite.status === 'revoked') {
             throw new Error('invite_revoked');
         }
-        const now = serverTimestamp();
+        const now = admin.firestore.FieldValue.serverTimestamp();
         // Mark invite as verified
-        yield updateDoc(inviteDoc.ref, { status: 'verified', verifiedAt: now });
+        yield inviteDoc.ref.update({ status: 'verified', verifiedAt: now });
         // Activate user
-        const userQ = query(collection(db, 'users'), where('email', '==', invite.email));
-        const userSnap = yield getDocs(userQ);
+        const userSnap = yield db.collection('users').where('email', '==', invite.email).get();
         let user;
         if (!userSnap.empty) {
-            yield updateDoc(userSnap.docs[0].ref, {
+            yield userSnap.docs[0].ref.update({
                 status: 'active',
                 emailVerifiedAt: now,
             });
@@ -233,11 +230,12 @@ export function verifyInviteEmail(_a) {
 // ---------------------------------------------------------------------------
 export function revokeInviteById(inviteId) {
     return __awaiter(this, void 0, void 0, function* () {
-        const inviteRef = doc(db, 'invites', inviteId);
-        const snap = yield getDoc(inviteRef);
-        if (!snap.exists())
+        const db = getAdminFirestore();
+        const inviteRef = db.collection('invites').doc(inviteId);
+        const snap = yield inviteRef.get();
+        if (!snap.exists)
             return;
-        yield updateDoc(inviteRef, { status: 'revoked', revokedAt: serverTimestamp() });
+        yield inviteRef.update({ status: 'revoked', revokedAt: admin.firestore.FieldValue.serverTimestamp() });
     });
 }
 // ---------------------------------------------------------------------------
@@ -247,8 +245,9 @@ export function revokeInviteById(inviteId) {
 export function bootstrapAdminAccount(_a) {
     return __awaiter(this, arguments, void 0, function* ({ uid, email, displayName, }) {
         var _b;
+        const db = getAdminFirestore();
         const normalizedEmail = email.toLowerCase().trim();
-        const userId = uid || doc(collection(db, 'users')).id;
+        const userId = uid || db.collection('users').doc().id;
         const name = (_b = displayName !== null && displayName !== void 0 ? displayName : normalizedEmail.split('@')[0]) !== null && _b !== void 0 ? _b : normalizedEmail;
         const userData = {
             uid: userId,
@@ -258,12 +257,12 @@ export function bootstrapAdminAccount(_a) {
             status: 'active',
             source: 'manual',
             emailVerifiedAt: new Date().toISOString(),
-            createdAt: serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
             lastLoginAt: null,
             invitedBy: null,
             bootstrapped: true,
         };
-        yield setDoc(doc(db, 'users', userId), userData, { merge: true });
+        yield db.collection('users').doc(userId).set(userData, { merge: true });
         return normalizeUser(userId, Object.assign(Object.assign({}, userData), { createdAt: new Date() }));
     });
 }
