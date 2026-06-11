@@ -3,7 +3,7 @@ FROM node:20-bullseye-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unbound \
     && rm -rf /var/lib/apt/lists/*
 
-RUN CORE_DNS_VERSION=1.12.6 \
+RUN CORE_DNS_VERSION=1.14.4 \
     && curl -fsSL "https://github.com/coredns/coredns/releases/download/v${CORE_DNS_VERSION}/coredns_${CORE_DNS_VERSION}_linux_amd64.tgz" -o /tmp/coredns.tgz \
     && tar -xzf /tmp/coredns.tgz -C /usr/local/bin/ coredns \
     && chmod +x /usr/local/bin/coredns \
