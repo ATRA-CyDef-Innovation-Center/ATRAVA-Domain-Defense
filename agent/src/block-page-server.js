@@ -1,32 +1,33 @@
-"use strict";
+'use strict'
 
-const http = require("http");
-const https = require("https");
-const tls = require("tls");
-const fs = require("fs");
-const path = require("path");
-const { execFileSync } = require("child_process");
+const http = require('http')
+const https = require('https')
+const tls = require('tls')
+const fs = require('fs')
+const path = require('path')
+const { execFileSync } = require('child_process')
 
-const HTTP_PORT = Number(process.env.BLOCK_PAGE_PORT || 80);
-const HTTPS_PORT = Number(process.env.BLOCK_PAGE_HTTPS_PORT || 443);
-const CERT_DIR = process.env.BLOCK_PAGE_CERT_DIR || "/var/lib/gcot-block-page";
-const SUPPORT_EMAIL = process.env.BLOCK_PAGE_SUPPORT_EMAIL || "support@atrava.local";
-const CA_KEY = path.join(CERT_DIR, "gcot-block-root-ca.key");
-const CA_CERT = path.join(CERT_DIR, "gcot-block-root-ca.crt");
+const HTTP_PORT = Number(process.env.BLOCK_PAGE_PORT || 80)
+const HTTPS_PORT = Number(process.env.BLOCK_PAGE_HTTPS_PORT || 443)
+const CERT_DIR = process.env.BLOCK_PAGE_CERT_DIR || '/var/lib/gcot-block-page'
+const SUPPORT_EMAIL =
+    process.env.BLOCK_PAGE_SUPPORT_EMAIL || 'support@atrava.local'
+const CA_KEY = path.join(CERT_DIR, 'gcot-block-root-ca.key')
+const CA_CERT = path.join(CERT_DIR, 'gcot-block-root-ca.crt')
 
 function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
 }
 
 function page(hostname) {
-  const blockedHost = escapeHtml(hostname || "this website");
+    const blockedHost = escapeHtml(hostname || 'this website')
 
-  return `<!doctype html>
+    return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -215,152 +216,159 @@ function page(hostname) {
       </div>
 
       <footer class="footer">
-        <span>GCOT Domain Defense</span>
+        <span>ATRAVA Domain Defense</span>
         <span>Policy notice generated for ${blockedHost}</span>
       </footer>
     </section>
   </main>
 </body>
-</html>`;
+</html>`
 }
 
 function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true })
 }
 
 function safeHostname(hostname) {
-  const clean = String(hostname || "blocked.local").split(":")[0].toLowerCase();
-  if (!/^[a-z0-9.-]+$/.test(clean)) return "blocked.local";
-  return clean.replace(/^\.+|\.+$/g, "") || "blocked.local";
+    const clean = String(hostname || 'blocked.local')
+        .split(':')[0]
+        .toLowerCase()
+    if (!/^[a-z0-9.-]+$/.test(clean)) return 'blocked.local'
+    return clean.replace(/^\.+|\.+$/g, '') || 'blocked.local'
 }
 
 function runOpenSsl(args) {
-  execFileSync("openssl", args, { stdio: ["ignore", "ignore", "pipe"] });
+    execFileSync('openssl', args, { stdio: ['ignore', 'ignore', 'pipe'] })
 }
 
 function ensureCa() {
-  ensureDir(CERT_DIR);
-  if (fs.existsSync(CA_KEY) && fs.existsSync(CA_CERT)) return;
+    ensureDir(CERT_DIR)
+    if (fs.existsSync(CA_KEY) && fs.existsSync(CA_CERT)) return
 
-  console.log(`[block-page] Generating GCOT block page root CA at ${CERT_DIR}`);
-  runOpenSsl([
-    "req",
-    "-x509",
-    "-newkey",
-    "rsa:4096",
-    "-sha256",
-    "-days",
-    "3650",
-    "-nodes",
-    "-keyout",
-    CA_KEY,
-    "-out",
-    CA_CERT,
-    "-subj",
-    "/C=PH/O=ATRAVA GCOT/OU=Domain Defense/CN=GCOT Block Page Root CA",
-  ]);
+    console.log(
+        `[block-page] Generating GCOT block page root CA at ${CERT_DIR}`
+    )
+    runOpenSsl([
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:4096',
+        '-sha256',
+        '-days',
+        '3650',
+        '-nodes',
+        '-keyout',
+        CA_KEY,
+        '-out',
+        CA_CERT,
+        '-subj',
+        '/C=PH/O=ATRAVA GCOT/OU=Domain Defense/CN=GCOT Block Page Root CA',
+    ])
 }
 
 function ensureHostCert(hostname) {
-  ensureCa();
-  const host = safeHostname(hostname);
-  const hostDir = path.join(CERT_DIR, "issued");
-  ensureDir(hostDir);
+    ensureCa()
+    const host = safeHostname(hostname)
+    const hostDir = path.join(CERT_DIR, 'issued')
+    ensureDir(hostDir)
 
-  const keyPath = path.join(hostDir, `${host}.key`);
-  const csrPath = path.join(hostDir, `${host}.csr`);
-  const certPath = path.join(hostDir, `${host}.crt`);
-  const extPath = path.join(hostDir, `${host}.ext`);
+    const keyPath = path.join(hostDir, `${host}.key`)
+    const csrPath = path.join(hostDir, `${host}.csr`)
+    const certPath = path.join(hostDir, `${host}.crt`)
+    const extPath = path.join(hostDir, `${host}.ext`)
 
-  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-    return { key: keyPath, cert: certPath };
-  }
+    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+        return { key: keyPath, cert: certPath }
+    }
 
-  fs.writeFileSync(
-    extPath,
-    [
-      "basicConstraints=CA:FALSE",
-      "keyUsage=digitalSignature,keyEncipherment",
-      "extendedKeyUsage=serverAuth",
-      `subjectAltName=DNS:${host}`,
-      "",
-    ].join("\n")
-  );
+    fs.writeFileSync(
+        extPath,
+        [
+            'basicConstraints=CA:FALSE',
+            'keyUsage=digitalSignature,keyEncipherment',
+            'extendedKeyUsage=serverAuth',
+            `subjectAltName=DNS:${host}`,
+            '',
+        ].join('\n')
+    )
 
-  runOpenSsl([
-    "req",
-    "-newkey",
-    "rsa:2048",
-    "-nodes",
-    "-keyout",
-    keyPath,
-    "-out",
-    csrPath,
-    "-subj",
-    `/C=PH/O=ATRAVA GCOT/OU=Domain Defense/CN=${host}`,
-  ]);
+    runOpenSsl([
+        'req',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-keyout',
+        keyPath,
+        '-out',
+        csrPath,
+        '-subj',
+        `/C=PH/O=ATRAVA GCOT/OU=Domain Defense/CN=${host}`,
+    ])
 
-  runOpenSsl([
-    "x509",
-    "-req",
-    "-in",
-    csrPath,
-    "-CA",
-    CA_CERT,
-    "-CAkey",
-    CA_KEY,
-    "-CAcreateserial",
-    "-out",
-    certPath,
-    "-days",
-    "825",
-    "-sha256",
-    "-extfile",
-    extPath,
-  ]);
+    runOpenSsl([
+        'x509',
+        '-req',
+        '-in',
+        csrPath,
+        '-CA',
+        CA_CERT,
+        '-CAkey',
+        CA_KEY,
+        '-CAcreateserial',
+        '-out',
+        certPath,
+        '-days',
+        '825',
+        '-sha256',
+        '-extfile',
+        extPath,
+    ])
 
-  return { key: keyPath, cert: certPath };
+    return { key: keyPath, cert: certPath }
 }
 
 function handleRequest(req, res) {
-  const host = (req.headers.host || "").split(":")[0];
-  res.writeHead(200, {
-    "Content-Type": "text/html; charset=utf-8",
-    "Cache-Control": "no-store, max-age=0",
-  });
-  res.end(page(host));
+    const host = (req.headers.host || '').split(':')[0]
+    res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store, max-age=0',
+    })
+    res.end(page(host))
 }
 
-ensureCa();
-const defaultCert = ensureHostCert("blocked.local");
+ensureCa()
+const defaultCert = ensureHostCert('blocked.local')
 
-const httpServer = http.createServer(handleRequest);
+const httpServer = http.createServer(handleRequest)
 const httpsServer = https.createServer(
-  {
-    key: fs.readFileSync(defaultCert.key),
-    cert: fs.readFileSync(defaultCert.cert),
-    SNICallback: (servername, callback) => {
-      try {
-        const cert = ensureHostCert(servername);
-        const context = tls.createSecureContext({
-          key: fs.readFileSync(cert.key),
-          cert: fs.readFileSync(cert.cert),
-        });
-        callback(null, context);
-      } catch (error) {
-        console.error("[block-page] Failed to prepare certificate:", error);
-        callback(error);
-      }
+    {
+        key: fs.readFileSync(defaultCert.key),
+        cert: fs.readFileSync(defaultCert.cert),
+        SNICallback: (servername, callback) => {
+            try {
+                const cert = ensureHostCert(servername)
+                const context = tls.createSecureContext({
+                    key: fs.readFileSync(cert.key),
+                    cert: fs.readFileSync(cert.cert),
+                })
+                callback(null, context)
+            } catch (error) {
+                console.error(
+                    '[block-page] Failed to prepare certificate:',
+                    error
+                )
+                callback(error)
+            }
+        },
     },
-  },
-  handleRequest
-);
+    handleRequest
+)
 
-httpServer.listen(HTTP_PORT, "0.0.0.0", () => {
-  console.log(`[block-page] HTTP listening on 0.0.0.0:${HTTP_PORT}`);
-});
+httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
+    console.log(`[block-page] HTTP listening on 0.0.0.0:${HTTP_PORT}`)
+})
 
-httpsServer.listen(HTTPS_PORT, "0.0.0.0", () => {
-  console.log(`[block-page] HTTPS listening on 0.0.0.0:${HTTPS_PORT}`);
-  console.log(`[block-page] Trust this CA on managed clients: ${CA_CERT}`);
-});
+httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+    console.log(`[block-page] HTTPS listening on 0.0.0.0:${HTTPS_PORT}`)
+    console.log(`[block-page] Trust this CA on managed clients: ${CA_CERT}`)
+})
