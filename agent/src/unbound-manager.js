@@ -142,6 +142,36 @@ class UnboundManager {
         }
     }
     /**
+     * Estimate DNS policy hits from recent Unbound query logs.
+     */
+    async getPolicyQueryStats(policyCache, lines = 5000) {
+        try {
+            const logs = await this.getTailLogs(lines);
+            let sampledQueries = 0;
+            let blockedQueries = 0;
+            logs.forEach((line) => {
+                const match = line.match(/\bquery:\s+\S+\s+(\S+)\s+\S+\s+IN\b/);
+                if (!match)
+                    return;
+                const domain = match[1].replace(/\.$/, '').toLowerCase();
+                sampledQueries += 1;
+                if (policyCache.isDomainBlacklisted(domain)) {
+                    blockedQueries += 1;
+                }
+            });
+            const blockRate = sampledQueries > 0 ? (blockedQueries / sampledQueries) * 100 : 0;
+            return {
+                sampledQueries,
+                blockedQueries,
+                blockRate: parseFloat(blockRate.toFixed(2)),
+            };
+        }
+        catch (error) {
+            console.error('[v0] Policy query stats retrieval failed:', error);
+            return { sampledQueries: 0, blockedQueries: 0, blockRate: 0 };
+        }
+    }
+    /**
      * Check if Unbound is running
      */
     async isRunning() {

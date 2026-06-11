@@ -43,6 +43,7 @@ class PolicySyncManager {
         this.nodeId = nodeId;
         this.coreDnsConfigPath = coreDnsConfigPath;
         this.policyCache = policyCache;
+        this.blockPageIp = process.env.BLOCK_PAGE_IP || process.env.NODE_IP || '127.0.0.1';
     }
     async syncPolicies() {
         try {
@@ -130,7 +131,7 @@ class PolicySyncManager {
             // Add blocked domains
             zoneContent += '# === Blacklisted Domains ===\n';
             blacklistedDomains.forEach((entry) => {
-                zoneContent += `127.0.0.1 ${entry.domain} # threat: ${entry.threatLevel}\n`;
+                zoneContent += `${this.blockPageIp} ${entry.domain} # threat: ${entry.threatLevel}\n`;
             });
             // Add whitelist comment
             zoneContent += '\n# === Whitelisted Domains (Always Allowed) ===\n';

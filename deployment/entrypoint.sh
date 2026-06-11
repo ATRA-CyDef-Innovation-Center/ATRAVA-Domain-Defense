@@ -42,12 +42,16 @@ echo "[entrypoint] Starting CoreDNS..."
 coredns -conf /var/lib/coredns/Corefile &
 COREDNS_PID=$!
 
-trap 'echo "[entrypoint] Shutting down..."; kill $UNBOUND_PID $COREDNS_PID 2>/dev/null || true; wait $UNBOUND_PID $COREDNS_PID 2>/dev/null || true; exit 0' INT TERM
+echo "[entrypoint] Starting block page server..."
+node src/block-page-server.js &
+BLOCK_PAGE_PID=$!
+
+trap 'echo "[entrypoint] Shutting down..."; kill $UNBOUND_PID $COREDNS_PID $BLOCK_PAGE_PID 2>/dev/null || true; wait $UNBOUND_PID $COREDNS_PID $BLOCK_PAGE_PID 2>/dev/null || true; exit 0' INT TERM
 
 node src/index.js
 AGENT_EXIT_CODE=$?
 
 echo "[entrypoint] Agent exited with code ${AGENT_EXIT_CODE}, stopping services..."
-kill $UNBOUND_PID $COREDNS_PID 2>/dev/null || true
-wait $UNBOUND_PID $COREDNS_PID 2>/dev/null || true
+kill $UNBOUND_PID $COREDNS_PID $BLOCK_PAGE_PID 2>/dev/null || true
+wait $UNBOUND_PID $COREDNS_PID $BLOCK_PAGE_PID 2>/dev/null || true
 exit $AGENT_EXIT_CODE

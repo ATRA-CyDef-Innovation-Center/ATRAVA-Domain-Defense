@@ -67,6 +67,23 @@ let db;
 let syncManager;
 let healthMonitor;
 let unboundManager;
+async function reportRuntimeMetrics(policyCache) {
+    await healthMonitor.checkHealth();
+    await healthMonitor.reportMetrics();
+    const unboundHealth = await unboundManager.getHealthReport();
+    if (unboundHealth.isRunning) {
+        const policyQueryStats = await unboundManager.getPolicyQueryStats(policyCache);
+        await db.collection('nodes').doc(NODE_ID).update({
+            unboundStatus: 'online',
+            unboundCacheHitRate: unboundHealth.cacheStats.hitRate,
+            unboundQueries: unboundHealth.queryStats.totalQueries,
+            queriesPerDay: unboundHealth.queryStats.totalQueries,
+            blockedQueries: policyQueryStats.blockedQueries,
+            sampledQueries: policyQueryStats.sampledQueries,
+            blockRate: policyQueryStats.blockRate,
+        });
+    }
+}
 async function initializeFirebase() {
     console.log('[v0] Initializing Firebase...');
     try {
@@ -128,6 +145,7 @@ async function startAgent() {
     // Start initial sync
     console.log('[v0] Starting initial policy sync...');
     await syncManager.syncPolicies();
+    await reportRuntimeMetrics(policyCache);
     // Start periodic syncing
     setInterval(async () => {
         try {
@@ -140,17 +158,7 @@ async function startAgent() {
     // Start health monitoring
     setInterval(async () => {
         try {
-            await healthMonitor.checkHealth();
-            await healthMonitor.reportMetrics();
-            // Include Unbound health in report
-            const unboundHealth = await unboundManager.getHealthReport();
-            if (unboundHealth.isRunning) {
-                await db.collection('nodes').doc(NODE_ID).update({
-                    unboundStatus: 'online',
-                    unboundCacheHitRate: unboundHealth.cacheStats.hitRate,
-                    unboundQueries: unboundHealth.queryStats.totalQueries,
-                });
-            }
+            await reportRuntimeMetrics(policyCache);
         }
         catch (error) {
             console.error('[v0] Error during health check:', error);

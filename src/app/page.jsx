@@ -65,6 +65,9 @@ export default function DashboardPage() {
   const dashboardStats = useMemo(() => {
     const totalQueries = nodes.reduce((sum, node) => sum + Number(node.queriesPerDay || 0), 0);
     const blockedQueries = nodes.reduce((sum, node) => {
+      if (node.blockedQueries !== undefined) {
+        return sum + Number(node.blockedQueries || 0);
+      }
       const queries = Number(node.queriesPerDay || 0);
       const blockRate = parsePercent(node.blockRate) / 100;
       return sum + queries * blockRate;

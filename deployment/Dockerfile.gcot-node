@@ -1,6 +1,6 @@
 FROM node:20-bullseye-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unbound dnsutils \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates openssl unbound dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN CORE_DNS_VERSION=1.14.4 \
