@@ -8,6 +8,10 @@ if [ ! -f /etc/unbound/unbound.conf ]; then
   exit 1
 fi
 
+if [ ! -f /var/lib/coredns/policies.zone ]; then
+  echo "; GCOT policy zone file" > /var/lib/coredns/policies.zone
+fi
+
 if [ ! -f /etc/unbound/unbound_control.key ] || [ ! -f /etc/unbound/unbound_control.pem ] || [ ! -f /etc/unbound/unbound_server.key ] || [ ! -f /etc/unbound/unbound_server.pem ]; then
   echo "[entrypoint] Generating Unbound control keys..."
   unbound-control-setup || true
@@ -17,7 +21,18 @@ echo "[entrypoint] Starting Unbound..."
 unbound -c /etc/unbound/unbound.conf &
 UNBOUND_PID=$!
 
-sleep 2
+for i in 1 2 3 4 5; do
+  if unbound-control status >/dev/null 2>&1; then
+    echo "[entrypoint] Unbound control interface ready"
+    break
+  fi
+  echo "[entrypoint] Waiting for Unbound control interface..."
+  sleep 2
+done
+
+if ! unbound-control status >/dev/null 2>&1; then
+  echo "[entrypoint] Warning: Unbound control interface did not become ready"
+fi
 
 echo "[entrypoint] Starting CoreDNS..."
 coredns -conf /var/lib/coredns/Corefile &
