@@ -179,11 +179,17 @@ async function logAction(userId, action, details) {
 // Helper: Trigger node sync
 async function triggerNodeSync() {
     try {
+        const timestamp = new Date().toISOString();
+        await db.collection('_system').doc('policyManifest').set({
+            timestamp,
+            updatedAt: timestamp,
+            updatedBy: 'domain-api',
+        }, { merge: true });
         // Update a sync trigger document
-        await db.collection('_system').doc('syncTrigger').update({
-            lastTriggered: new Date().toISOString(),
+        await db.collection('_system').doc('syncTrigger').set({
+            lastTriggered: timestamp,
             requiresSync: true,
-        });
+        }, { merge: true });
     }
     catch (error) {
         console.error('[v0] Error triggering sync:', error);

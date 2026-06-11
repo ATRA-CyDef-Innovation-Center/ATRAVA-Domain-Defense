@@ -48,13 +48,22 @@ class PolicySyncManager {
         try {
             console.log('[v0] Starting policy sync...');
             // Fetch current policy manifest
-            const manifestDoc = await this.db.collection('_system').doc('policyManifest').get();
+            const manifestRef = this.db.collection('_system').doc('policyManifest');
+            const manifestDoc = await manifestRef.get();
+            let currentVersion;
             if (!manifestDoc.exists) {
-                console.log('[v0] No policy manifest found, creating empty one');
-                return;
+                console.log('[v0] No policy manifest found, creating one from current domain entries');
+                currentVersion = new Date().toISOString();
+                await manifestRef.set({
+                    timestamp: currentVersion,
+                    createdAt: currentVersion,
+                    createdBy: this.nodeId,
+                }, { merge: true });
             }
-            const manifest = manifestDoc.data();
-            const currentVersion = manifest.timestamp;
+            else {
+                const manifest = manifestDoc.data();
+                currentVersion = (manifest === null || manifest === void 0 ? void 0 : manifest.timestamp) || new Date().toISOString();
+            }
             // Check if we need to sync
             if (currentVersion === this.lastSyncVersion) {
                 console.log('[v0] Policies already up-to-date');

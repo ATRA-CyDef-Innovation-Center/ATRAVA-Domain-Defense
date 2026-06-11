@@ -153,11 +153,24 @@ export default function DomainsPage() {
     });
   };
 
-  const triggerNodeSync = async () => {
+  const triggerNodeSync = async (details = {}) => {
+    const timestamp = new Date().toISOString();
+
+    await setDoc(
+      doc(db, '_system', 'policyManifest'),
+      {
+        timestamp,
+        updatedAt: serverTimestamp(),
+        updatedBy: actor,
+        ...details,
+      },
+      { merge: true }
+    );
+
     await setDoc(
       doc(db, '_system', 'syncTrigger'),
       {
-        lastTriggered: new Date().toISOString(),
+        lastTriggered: timestamp,
         requiresSync: true,
       },
       { merge: true }
@@ -194,7 +207,7 @@ export default function DomainsPage() {
           : { reason: entry.reason }),
       }
     );
-    await triggerNodeSync();
+    await triggerNodeSync({ lastChange: 'domain_added', listType, domain: cleanDomain });
   };
 
   const handleBulkImport = async ({ content, fileType }) => {
@@ -222,7 +235,7 @@ export default function DomainsPage() {
 
     await batch.commit();
     await createAuditLog('bulk_import', { count: entries.length, type: listType });
-    await triggerNodeSync();
+    await triggerNodeSync({ lastChange: 'bulk_import', listType, imported: entries.length });
   };
 
   const handleDeleteDomain = async (listType, domain) => {
@@ -231,7 +244,7 @@ export default function DomainsPage() {
       listType === 'blacklist' ? 'domain_removed' : 'whitelist_removed',
       { domain: domain.domain, type: listType }
     );
-    await triggerNodeSync();
+    await triggerNodeSync({ lastChange: 'domain_removed', listType, domain: domain.domain });
   };
 
   const getThreatLevelColor = (level) => {
