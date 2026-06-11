@@ -8,13 +8,13 @@ if [ ! -f /etc/unbound/unbound.conf ]; then
   exit 1
 fi
 
-if [ ! -f /var/lib/coredns/policies.zone ]; then
-  echo "; GCOT policy zone file" > /var/lib/coredns/policies.zone
-fi
+cat > /var/lib/coredns/policies.zone <<'EOF'
+# GCOT policy hosts file
+EOF
 
 if [ ! -f /etc/unbound/unbound_control.key ] || [ ! -f /etc/unbound/unbound_control.pem ] || [ ! -f /etc/unbound/unbound_server.key ] || [ ! -f /etc/unbound/unbound_server.pem ]; then
   echo "[entrypoint] Generating Unbound control keys..."
-  unbound-control-setup || true
+  (cd /etc/unbound && unbound-control-setup) || true
 fi
 
 echo "[entrypoint] Starting Unbound..."

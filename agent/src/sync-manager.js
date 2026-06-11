@@ -125,20 +125,17 @@ class PolicySyncManager {
     async updateCoreDNSConfig(blacklistedDomains, whitelistedDomains) {
         try {
             console.log('[v0] Updating CoreDNS configuration...');
-            // Generate zone file for blocked domains
-            let zoneContent = '$ORIGIN example.com.\n';
-            zoneContent += '@  3600  IN  SOA  ns1.example.com. admin.example.com. (2024051800 3600 1800 604800 86400)\n';
-            zoneContent += '@  3600  IN  NS   ns1.example.com.\n';
-            zoneContent += 'ns1  3600  IN  A   127.0.0.1\n\n';
+            // Generate a hosts file for blocked domains. CoreDNS falls through for everything else.
+            let zoneContent = '# GCOT policy hosts file\n\n';
             // Add blocked domains
-            zoneContent += '; === Blacklisted Domains ===\n';
+            zoneContent += '# === Blacklisted Domains ===\n';
             blacklistedDomains.forEach((entry) => {
-                zoneContent += `${entry.domain.split('.').join('.')}  3600  IN  A  127.0.0.1  ; threat: ${entry.threatLevel}\n`;
+                zoneContent += `127.0.0.1 ${entry.domain} # threat: ${entry.threatLevel}\n`;
             });
             // Add whitelist comment
-            zoneContent += '\n; === Whitelisted Domains (Always Allowed) ===\n';
+            zoneContent += '\n# === Whitelisted Domains (Always Allowed) ===\n';
             whitelistedDomains.forEach((domain) => {
-                zoneContent += `; ${domain}\n`;
+                zoneContent += `# ${domain}\n`;
             });
             // Write zone file (in production, this would write to actual zone files)
             const zoneFilePath = path.join(path.dirname(this.coreDnsConfigPath), 'policies.zone');
