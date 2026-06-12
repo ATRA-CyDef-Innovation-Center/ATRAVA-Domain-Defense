@@ -267,11 +267,12 @@ gcot-web.service - GCOT Next.js Web (Production)
 ### Step 7: Configure Nginx
 
 ```bash
-# Copy the nginx site config
+# Copy the HTTP bootstrap nginx site config
 sudo cp /opt/gcot/deployment/nginx-gcot.conf /etc/nginx/sites-available/gcot
 
 # Enable the site
 sudo ln -sf /etc/nginx/sites-available/gcot /etc/nginx/sites-enabled/gcot
+sudo rm -f /etc/nginx/sites-enabled/default
 
 # Create certbot challenge directory
 sudo mkdir -p /var/www/certbot
@@ -287,6 +288,8 @@ sudo systemctl reload nginx
 sudo systemctl status nginx
 ```
 
+> If `sudo nginx -t` fails with `open() "/etc/letsencrypt/options-ssl-nginx.conf" failed`, the copied Nginx file is an HTTPS config from after Certbot, but Certbot has not created the TLS files yet. Pull the latest repository changes, copy `deployment/nginx-gcot.conf` again, and rerun `sudo nginx -t`.
+
 ### Step 8: Obtain TLS Certificate with Certbot
 
 ```bash
@@ -300,7 +303,7 @@ sudo certbot renew --dry-run
 sudo certbot certificates
 ```
 
-**Note:** Certbot will update the Nginx config automatically to use the certificate.
+**Note:** The repository Nginx config starts as an HTTP bootstrap proxy so Nginx can start before certificates exist. Certbot will update the Nginx config automatically to add HTTPS, certificate paths, and HTTP-to-HTTPS redirects.
 
 ### Step 9: Verify Web GUI
 

@@ -80,6 +80,7 @@ sudo systemctl status gcot-web
 ```bash
 sudo cp /opt/gcot/deployment/nginx-gcot.conf /etc/nginx/sites-available/gcot
 sudo ln -sf /etc/nginx/sites-available/gcot /etc/nginx/sites-enabled/gcot
+sudo rm -f /etc/nginx/sites-enabled/default
 sudo mkdir -p /var/www/certbot
 sudo chown -R www-data:www-data /var/www/certbot
 sudo nginx -t
@@ -92,6 +93,8 @@ sudo systemctl reload nginx
 sudo certbot --nginx -d atrava-domain-defense.cisoasaservice.io
 sudo certbot renew --dry-run
 ```
+
+The repository Nginx config is an HTTP bootstrap proxy. Certbot updates it with HTTPS settings after the certificate is issued.
 
 Important manual steps
 
