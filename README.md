@@ -306,12 +306,18 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=xxx
 NODE_ID=node-ph-01
 NODE_NAME="Philippines DNS Node"
 NODE_IP=115.147.169.196
+BLOCK_PAGE_IP=115.147.169.196
+BLOCK_PAGE_URL=https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key
 SYNC_INTERVAL=60000
 HEALTH_CHECK_INTERVAL=120000
 ```
+
+`BLOCK_PAGE_IP` is returned by DNS for blacklisted domains. The DNS node's block-page shim redirects HTTP requests to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL` with the original blocked domain in the `domain` query parameter. This does not require installing a local root certificate on endpoint devices.
+
+The WebGUI page can use its normal public SSL certificate. Transparent HTTPS redirects for arbitrary blocked domains are still not possible with DNS-only enforcement, because the browser validates the original blocked hostname before any HTTP redirect can be sent.
 
 ## Firestore Schema
 

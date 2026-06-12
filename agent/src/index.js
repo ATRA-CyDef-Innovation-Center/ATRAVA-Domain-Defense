@@ -40,6 +40,7 @@ const sync_manager_1 = require("./sync-manager");
 const health_monitor_1 = require("./health-monitor");
 const policy_cache_1 = require("./policy-cache");
 const unbound_manager_1 = require("./unbound-manager");
+const proxy_server_1 = require("./proxy-server");
 const dotenv = require('dotenv');
 const agentRoot = path.resolve(__dirname, '..');
 const envCandidates = [
@@ -67,6 +68,7 @@ let db;
 let syncManager;
 let healthMonitor;
 let unboundManager;
+let proxyServer;
 async function reportRuntimeMetrics(policyCache) {
     await healthMonitor.checkHealth();
     await healthMonitor.reportMetrics();
@@ -145,6 +147,7 @@ async function startAgent() {
     // Start initial sync
     console.log('[v0] Starting initial policy sync...');
     await syncManager.syncPolicies();
+    proxyServer = (0, proxy_server_1.startProxyServer)({ policyCache });
     await reportRuntimeMetrics(policyCache);
     // Start periodic syncing
     setInterval(async () => {
@@ -170,6 +173,8 @@ async function startAgent() {
     // Handle graceful shutdown
     process.on('SIGTERM', async () => {
         console.log('[v0] Received SIGTERM, shutting down gracefully...');
+        if (proxyServer)
+            proxyServer.close();
         await db.collection('nodes').doc(NODE_ID).update({
             status: 'offline',
             lastSync: new Date().toISOString(),
@@ -178,6 +183,8 @@ async function startAgent() {
     });
     process.on('SIGINT', async () => {
         console.log('[v0] Received SIGINT, shutting down gracefully...');
+        if (proxyServer)
+            proxyServer.close();
         await db.collection('nodes').doc(NODE_ID).update({
             status: 'offline',
             lastSync: new Date().toISOString(),

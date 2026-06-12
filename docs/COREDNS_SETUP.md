@@ -60,8 +60,12 @@ Create `/etc/coredns/Corefile`:
     # Health check endpoint
     health :8080
 
-    # File-based zone for blacklisted domains
-    file /var/lib/coredns/policies.zone example.com
+    # Generated hosts file for blacklisted domains.
+    # Blacklisted domains resolve to the NTC block-page IP.
+    hosts /var/lib/coredns/policies.zone {
+        ttl 3600
+        fallthrough
+    }
 
     # Forward queries upstream
     forward . 8.8.8.8 8.8.4.4
@@ -76,23 +80,22 @@ Create `/etc/coredns/Corefile`:
 
 ### Policy Zone File
 
-CoreDNS generates `/var/lib/coredns/policies.zone` automatically, but here's the format:
+The GCOT agent generates `/var/lib/coredns/policies.zone` automatically as a CoreDNS `hosts` file. Blacklisted domains resolve to the configured block-page IP:
 
-```zone
-$ORIGIN example.com.
-@  3600  IN  SOA  ns1.example.com. admin.example.com. (2024051800 3600 1800 604800 86400)
-@  3600  IN  NS   ns1.example.com.
-ns1  3600  IN  A   127.0.0.1
+```text
+# GCOT policy hosts file
 
-; === Blacklisted Domains (Return NXDOMAIN) ===
-malware.example.com  3600  IN  A  127.0.0.1
-phishing-site.net    3600  IN  A  127.0.0.1
-botnet-c2.org        3600  IN  A  127.0.0.1
+# === Blacklisted Domains ===
+115.147.169.196 malware.example.com # threat: critical
+115.147.169.196 phishing-site.net # threat: high
+115.147.169.196 botnet-c2.org # threat: critical
 
-; === Whitelisted Domains (Always Allowed) ===
-; trusted-vendor.com
-; safe-cdn.net
+# === Whitelisted Domains (Always Allowed) ===
+# trusted-vendor.com
+# safe-cdn.net
 ```
+
+When a browser requests a blocked HTTP site, DNS points the domain to the block-page server on the DNS node. The server responds with a redirect to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL?domain=<blocked-domain>`, giving users an SSL-backed block notice without installing a certificate on the endpoint. HTTPS cannot be transparently redirected with DNS alone because the browser validates TLS for the original blocked hostname before it can receive an HTTP redirect.
 
 ## GCOT DNS Policy Agent Setup
 
@@ -119,6 +122,8 @@ nano .env
 NODE_ID=node-ho-01                    # Unique ID for this DNS node
 NODE_NAME="Head Office DNS"           # Human-readable name
 NODE_IP=115.147.169.196                     # This node's IP address
+BLOCK_PAGE_IP=115.147.169.196              # IP returned for blacklisted domains
+BLOCK_PAGE_URL=https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
 
 # Firebase Configuration
 FIREBASE_PROJECT_ID=your-project-id
