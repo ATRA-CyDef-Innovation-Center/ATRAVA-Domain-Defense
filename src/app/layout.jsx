@@ -12,6 +12,8 @@ export const metadata = {
         icon: '/icon.svg',
     },
 };
+const enableVercelAnalytics = process.env.VERCEL === '1' ||
+    process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === 'true';
 export default function RootLayout({ children, }) {
     return (<html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
@@ -21,7 +23,7 @@ export default function RootLayout({ children, }) {
             <Toaster />
           </AuthProvider>
         </ThemeProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {enableVercelAnalytics && <Analytics />}
       </body>
     </html>);
 }
