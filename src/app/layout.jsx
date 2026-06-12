@@ -1,11 +1,9 @@
-import { Geist, Geist_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { AuthProvider } from '@/components/auth-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+
 export const metadata = {
     title: 'ATRAVA Domain Defense',
     description: 'ATRAVA Domain Defense DNS security dashboard',
