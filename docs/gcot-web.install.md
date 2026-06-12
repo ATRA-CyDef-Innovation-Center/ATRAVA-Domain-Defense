@@ -52,6 +52,10 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
+FIREBASE_ADMIN_PROJECT_ID=your-project-id
+FIREBASE_ADMIN_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...paste the full private key here...\n-----END PRIVATE KEY-----\n"
+
 AUTH_SECRET=replace_with_strong_random_secret
 EOF
 chmod 600 /opt/gcot/.env.local
@@ -98,8 +102,8 @@ The repository Nginx config is an HTTP bootstrap proxy. Certbot updates it with 
 
 Important manual steps
 
-- Edit `/opt/gcot/.env.local` and set production secrets (Firebase keys, `AUTH_SECRET`, and `NEXT_PUBLIC_APP_URL=https://atrava-domain-defense.cisoasaservice.io`).
-- Ensure `/opt/gcot/.env.local` is protected: `chmod 600 /opt/gcot/.env.local`.
+- Edit `/opt/gcot/.env.local` and set production secrets (Firebase client keys, Firebase Admin service account keys, `AUTH_SECRET`, and `NEXT_PUBLIC_APP_URL=https://atrava-domain-defense.cisoasaservice.io`).
+- Ensure `/opt/gcot/.env.local` is owned by `gcot` and protected: `sudo chown gcot:gcot /opt/gcot/.env.local && sudo chmod 600 /opt/gcot/.env.local`.
 - Do not expose port 3000 to the public; Nginx proxies to it on `localhost`.
 
 Rollback

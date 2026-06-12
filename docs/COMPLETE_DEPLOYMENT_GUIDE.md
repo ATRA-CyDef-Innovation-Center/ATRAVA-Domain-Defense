@@ -193,7 +193,7 @@ sudo chown gcot:gcot /opt/gcot
 # Switch to gcot user and clone
 sudo -u gcot bash << 'EOF'
 cd /opt/gcot
-git clone https://github.com/your-org/ATRAVA-Domain-Defense.git .
+git clone https://github.com//ATRAVA-Domain-Defense.git .
 EOF
 ```
 
@@ -206,23 +206,24 @@ cat > /opt/gcot/.env.local << 'ENDENV'
 NODE_ENV=production
 NEXT_PUBLIC_APP_URL=https://atrava-domain-defense.cisoasaservice.io
 
-# Firebase Client Config (from Firebase Console)
-NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+# ATRAVA Domain Defense frontend Firebase web config
 
-# Server-side Firebase Admin (if needed for functions)
-FIREBASE_ADMIN_PROJECT_ID=your-project-id
-FIREBASE_ADMIN_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-...paste the full private key here...
------END PRIVATE KEY-----"
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
+
+# Firebase Configuration
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+
 
 # Auth Secret (generate: `openssl rand -base64 32`)
-AUTH_SECRET=replace_with_a_strong_random_secret_32_chars_minimum
+AUTH_SECRET=
 ENDENV
 chmod 600 /opt/gcot/.env.local
 EOF
@@ -233,8 +234,11 @@ EOF
 ```bash
 # Install dependencies and build
 cd /opt/gcot
-sudo -u gcot npm install --production
+sudo chown -R gcot:gcot /opt/gcot
+sudo chmod 600 /opt/gcot/.env.local
+sudo -u gcot npm install --omit=dev
 sudo -u gcot npm run build
+sudo systemctl restart gcot-web
 
 # Verify build succeeded
 ls -la /opt/gcot/.next
@@ -267,12 +271,11 @@ gcot-web.service - GCOT Next.js Web (Production)
 ### Step 7: Configure Nginx
 
 ```bash
-# Copy the HTTP bootstrap nginx site config
+# Copy the nginx site config
 sudo cp /opt/gcot/deployment/nginx-gcot.conf /etc/nginx/sites-available/gcot
 
 # Enable the site
 sudo ln -sf /etc/nginx/sites-available/gcot /etc/nginx/sites-enabled/gcot
-sudo rm -f /etc/nginx/sites-enabled/default
 
 # Create certbot challenge directory
 sudo mkdir -p /var/www/certbot
@@ -288,8 +291,6 @@ sudo systemctl reload nginx
 sudo systemctl status nginx
 ```
 
-> If `sudo nginx -t` fails with `open() "/etc/letsencrypt/options-ssl-nginx.conf" failed`, the copied Nginx file is an HTTPS config from after Certbot, but Certbot has not created the TLS files yet. Pull the latest repository changes, copy `deployment/nginx-gcot.conf` again, and rerun `sudo nginx -t`.
-
 ### Step 8: Obtain TLS Certificate with Certbot
 
 ```bash
@@ -303,7 +304,7 @@ sudo certbot renew --dry-run
 sudo certbot certificates
 ```
 
-**Note:** The repository Nginx config starts as an HTTP bootstrap proxy so Nginx can start before certificates exist. Certbot will update the Nginx config automatically to add HTTPS, certificate paths, and HTTP-to-HTTPS redirects.
+**Note:** Certbot will update the Nginx config automatically to use the certificate.
 
 ### Step 9: Verify Web GUI
 
@@ -460,7 +461,6 @@ sudo dmesg -T | tail -20
 sudo ufw default deny incoming
 sudo ufw allow 53/udp    # DNS (clients)
 sudo ufw allow 53/tcp    # DNS (TCP fallback)
-sudo ufw allow 22/tcp    # SSH (adjust if needed)
 sudo ufw allow 5053/udp  # CoreDNS (internal only - restrict to internal network)
 sudo ufw allow 5053/tcp
 sudo ufw allow 8080/tcp  # CoreDNS health (restrict to monitoring host)
@@ -471,7 +471,6 @@ sudo ufw enable
 
 ```bash
 sudo ufw default deny incoming
-sudo ufw allow 22/tcp    # SSH (adjust if needed)
 sudo ufw allow 80/tcp    # HTTP (Certbot renewal)
 sudo ufw allow 443/tcp   # HTTPS
 sudo ufw enable
