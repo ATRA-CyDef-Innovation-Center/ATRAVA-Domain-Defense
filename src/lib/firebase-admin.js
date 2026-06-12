@@ -7,8 +7,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import * as admin from 'firebase-admin';
+import * as firebaseAdmin from 'firebase-admin';
 import { config as loadDotenv } from 'dotenv';
+const admin = firebaseAdmin.default || firebaseAdmin;
 // ---------------------------------------------------------------------------
 // Firebase Admin SDK — singleton initializer
 // Returns null if credentials are not configured / are placeholders.
@@ -16,10 +17,13 @@ import { config as loadDotenv } from 'dotenv';
 const PLACEHOLDER_MARKERS = [
     'REPLACE_WITH',
     'your-service-account',
+    'your_private_key',
+    'your-project-id',
     'YOUR_',
     '-----BEGIN RSA', // bare placeholder text (not real key)
 ];
 let loadedFallbackEnv = false;
+let adminConfigWarningEmitted = false;
 function loadFallbackAdminEnv() {
     if (loadedFallbackEnv)
         return;
@@ -31,28 +35,65 @@ function loadFallbackAdminEnv() {
 function isPlaceholder(value) {
     return PLACEHOLDER_MARKERS.some((marker) => value.toUpperCase().includes(marker.toUpperCase()));
 }
+function stripOuterQuotes(value) {
+    const trimmed = String(value !== null && value !== void 0 ? value : '').trim();
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+        (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+        return trimmed.slice(1, -1);
+    }
+    return trimmed;
+}
+function normalizePrivateKey(value) {
+    return stripOuterQuotes(value).replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+}
+function hasPrivateKeyShape(privateKey) {
+    return privateKey.includes('-----BEGIN PRIVATE KEY-----') &&
+        privateKey.includes('-----END PRIVATE KEY-----');
+}
+function warnAdminConfig(message) {
+    if (adminConfigWarningEmitted)
+        return;
+    adminConfigWarningEmitted = true;
+    console.warn(`[firebase-admin] ${message}`);
+}
 export function tryGetAdminApp() {
     var _a, _b, _c;
     if (admin.apps.length > 0)
         return admin.apps[0];
     loadFallbackAdminEnv();
-    const projectId = (_a = process.env.FIREBASE_ADMIN_PROJECT_ID) !== null && _a !== void 0 ? _a : process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
-    const clientEmail = (_b = process.env.FIREBASE_ADMIN_CLIENT_EMAIL) !== null && _b !== void 0 ? _b : process.env.FIREBASE_CLIENT_EMAIL || '';
+    const projectId = stripOuterQuotes((_a = process.env.FIREBASE_ADMIN_PROJECT_ID) !== null && _a !== void 0 ? _a : process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '');
+    const clientEmail = stripOuterQuotes((_b = process.env.FIREBASE_ADMIN_CLIENT_EMAIL) !== null && _b !== void 0 ? _b : process.env.FIREBASE_CLIENT_EMAIL || '');
     const rawPrivateKey = (_c = process.env.FIREBASE_ADMIN_PRIVATE_KEY) !== null && _c !== void 0 ? _c : process.env.FIREBASE_PRIVATE_KEY || '';
+    const privateKey = normalizePrivateKey(rawPrivateKey);
+    const missing = [];
+    if (!projectId)
+        missing.push('FIREBASE_ADMIN_PROJECT_ID');
+    if (!clientEmail)
+        missing.push('FIREBASE_ADMIN_CLIENT_EMAIL');
+    if (!rawPrivateKey)
+        missing.push('FIREBASE_ADMIN_PRIVATE_KEY');
+    if (missing.length > 0) {
+        warnAdminConfig(`Missing Firebase Admin environment variables: ${missing.join(', ')}.`);
+    }
     const hasServiceAccount = projectId &&
         clientEmail &&
-        rawPrivateKey &&
+        privateKey &&
         !isPlaceholder(clientEmail) &&
-        !isPlaceholder(rawPrivateKey);
+        !isPlaceholder(privateKey) &&
+        hasPrivateKeyShape(privateKey);
+    if (rawPrivateKey && !hasServiceAccount && !isPlaceholder(privateKey)) {
+        warnAdminConfig('Firebase Admin private key is present but does not look like a service account PEM. Use escaped \\n line breaks in FIREBASE_ADMIN_PRIVATE_KEY.');
+    }
     if (hasServiceAccount) {
-        const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
         try {
             return admin.initializeApp({
                 credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
                 projectId,
             });
         }
-        catch (_d) {
+        catch (err) {
+            const message = err instanceof Error ? err.message : 'unknown error';
+            warnAdminConfig(`Failed to initialize Firebase Admin SDK from service account: ${message}`);
             return null;
         }
     }
@@ -64,6 +105,7 @@ export function tryGetAdminApp() {
             });
         }
         catch (_e) {
+            warnAdminConfig('Firebase Admin application default credentials are unavailable.');
             return null;
         }
     }
