@@ -202,7 +202,9 @@ services:
         ports:
             - '53:53/udp'
             - '53:53/tcp'
+            - '80:80/tcp' # Block-page HTTP redirect
             - '8080:8080' # Health check
+            - '8081:8081/tcp' # Explicit proxy
         volumes:
             - ./coredns/Corefile:/etc/coredns/Corefile:ro
             - coredns-data:/var/lib/coredns
@@ -254,6 +256,41 @@ gcot-dns.company.com.  IN  A  10.0.3.50   ; B2
 
 ```bash
 curl http://localhost:8080/health
+```
+
+### Block-Page HTTP Redirect Check
+
+The block-page shim only handles plain HTTP. Verify it directly before testing in a browser:
+
+```bash
+# From the DNS node host
+curl -I -H 'Host: facebook.com' http://127.0.0.1/
+
+# From a client network
+curl -I -H 'Host: facebook.com' http://115.147.169.196/
+```
+
+Expected response:
+
+```text
+HTTP/1.1 302 Found
+Location: https://atrava-domain-defense.cisoasaservice.io/ntc-blocker?domain=facebook.com
+```
+
+If these commands time out, TCP/80 is blocked by the host firewall, cloud firewall, or Docker port mapping. HTTPS sites with HSTS, including Facebook, cannot be transparently redirected by DNS-only enforcement; use an explicit proxy/agent for HTTPS block pages.
+
+### Explicit Proxy Check
+
+The agent also starts an explicit proxy on `PROXY_PORT` (`8081` by default). Clients must be configured to use this proxy; DNS settings alone do not route browser traffic through it.
+
+```bash
+# HTTP request through the proxy should receive a redirect to the NTC page
+curl -I -x http://115.147.169.196:8081 http://facebook.com/
+
+# HTTPS CONNECT through the proxy is blocked, but browsers usually show a proxy
+# error instead of following a redirect unless TLS interception or an endpoint
+# agent is deployed.
+curl -I -x http://115.147.169.196:8081 https://facebook.com/
 ```
 
 ### GCOT Agent Logs

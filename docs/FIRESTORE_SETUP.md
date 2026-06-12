@@ -15,10 +15,12 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
 # Server-side Firebase Admin SDK credentials
-FIREBASE_PRIVATE_KEY=your_private_key
-FIREBASE_CLIENT_EMAIL=your_service_account_email
-FIREBASE_PROJECT_ID=your_project_id
+FIREBASE_ADMIN_PROJECT_ID=your_project_id
+FIREBASE_ADMIN_CLIENT_EMAIL=your_service_account_email
+FIREBASE_ADMIN_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n'
 ```
+
+For systemd deployments, keep `FIREBASE_ADMIN_PRIVATE_KEY` on one physical line and wrap it in single quotes so the `\n` escapes survive `EnvironmentFile` parsing.
 
 ## Firestore Collections & Schema
 

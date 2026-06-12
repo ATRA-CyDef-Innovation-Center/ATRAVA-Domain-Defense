@@ -54,13 +54,15 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
 FIREBASE_ADMIN_PROJECT_ID=your-project-id
 FIREBASE_ADMIN_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
-FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...paste the full private key here...\n-----END PRIVATE KEY-----\n"
+FIREBASE_ADMIN_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----\n...paste the full private key here...\n-----END PRIVATE KEY-----\n'
 
 AUTH_SECRET=replace_with_strong_random_secret
 EOF
 chmod 600 /opt/gcot/.env.local
 '
 ```
+
+The private key must stay on one physical line. Use single quotes around the value so systemd `EnvironmentFile` preserves the `\n` escapes.
 
 5. Install dependencies and build the app:
 

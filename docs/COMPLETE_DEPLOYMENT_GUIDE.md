@@ -16,7 +16,7 @@
 
 - Ubuntu 22.04 LTS or 24.04 LTS
 - 2+ vCPU, 4GB RAM, 20GB disk
-- Open ports: 53 (UDP/TCP), 5053 (UDP/TCP), 8080 (TCP)
+- Open ports: 53 (UDP/TCP), 80 (TCP for blocked HTTP redirect), 5053 (UDP/TCP), 8080 (TCP), 8081 (TCP explicit proxy)
 - Internet access to pull Docker images and reach Firebase
 
 ### Step 1: Install Docker & Docker Compose
@@ -216,10 +216,12 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
 
-# Firebase Configuration
-FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=
+# Server-side Firebase Admin service account credentials.
+# Keep the private key on one physical line. Single quotes preserve \n when
+# systemd loads this file through EnvironmentFile.
+FIREBASE_ADMIN_PROJECT_ID=
+FIREBASE_ADMIN_CLIENT_EMAIL=
+FIREBASE_ADMIN_PRIVATE_KEY='-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n'
 
 
 # Auth Secret (generate: `openssl rand -base64 32`)
@@ -227,6 +229,23 @@ AUTH_SECRET=
 ENDENV
 chmod 600 /opt/gcot/.env.local
 EOF
+```
+
+Use the service account JSON from Firebase Console -> Project settings -> Service accounts -> Generate new private key:
+
+- `FIREBASE_ADMIN_PROJECT_ID` = `project_id`
+- `FIREBASE_ADMIN_CLIENT_EMAIL` = `client_email`
+- `FIREBASE_ADMIN_PRIVATE_KEY` = `private_key`
+
+For the Web GUI systemd service, the Admin private key must stay on one line and should be single-quoted as shown above. After `sudo systemctl restart gcot-web`, verify the running process still has escaped newlines:
+
+```bash
+pid=$(systemctl show -p MainPID --value gcot-web)
+sudo bash -c 'tr "\0" "\n" < "/proc/$1/environ"' _ "$pid" | awk -F= '/^FIREBASE_ADMIN_PRIVATE_KEY=/ {
+  v=$0
+  sub(/^[^=]*=/,"",v)
+  print "hasBegin=" (v ~ /BEGIN PRIVATE KEY/) " hasEnd=" (v ~ /END PRIVATE KEY/) " hasEscapedNewline=" (v ~ /\\n/)
+}'
 ```
 
 ### Step 5: Build the Next.js Application
@@ -461,9 +480,11 @@ sudo dmesg -T | tail -20
 sudo ufw default deny incoming
 sudo ufw allow 53/udp    # DNS (clients)
 sudo ufw allow 53/tcp    # DNS (TCP fallback)
+sudo ufw allow 80/tcp    # Block-page HTTP redirect for blocked domains
 sudo ufw allow 5053/udp  # CoreDNS (internal only - restrict to internal network)
 sudo ufw allow 5053/tcp
 sudo ufw allow 8080/tcp  # CoreDNS health (restrict to monitoring host)
+sudo ufw allow 8081/tcp  # Explicit HTTP/HTTPS proxy (restrict to client networks)
 sudo ufw enable
 ```
 
@@ -504,7 +525,7 @@ sudo tar -czf /backup/web-env-$(date +%Y%m%d).tar.gz /opt/gcot/.env.local
 
 | Component           | Host/IP         | Port                             | Status                       |
 | ------------------- | --------------- | -------------------------------- | ---------------------------- |
-| GCOT Node (Docker)  | 115.147.169.196 | 53, 5053, 8080                   | Running via `docker compose` |
+| GCOT Node (Docker)  | 115.147.169.196 | 53, 80, 5053, 8080, 8081         | Running via `docker compose` |
 | Web GUI (Next.js)   | 115.147.169.197 | 3000 (localhost), 80/443 (Nginx) | Running via `systemd`        |
 | Nginx Reverse Proxy | 115.147.169.197 | 80 → 443                         | Running                      |
 
