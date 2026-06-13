@@ -15,7 +15,8 @@
     # Load blacklist policies from a generated hosts file.
     # Unlisted domains fall through to upstream DNS.
     hosts /var/lib/coredns/policies.zone {
-        ttl 3600
+        ttl 30
+        reload 1s
         fallthrough
     }
     

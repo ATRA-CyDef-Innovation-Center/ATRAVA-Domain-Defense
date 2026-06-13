@@ -63,7 +63,8 @@ Create `/etc/coredns/Corefile`:
     # Generated hosts file for blacklisted domains.
     # Blacklisted domains resolve to the NTC block-page IP.
     hosts /var/lib/coredns/policies.zone {
-        ttl 3600
+        ttl 30
+        reload 1s
         fallthrough
     }
 
@@ -136,6 +137,7 @@ COREDNS_CONF_PATH=/etc/coredns/Corefile    # Path to CoreDNS Corefile
 
 # Sync Settings (in milliseconds)
 SYNC_INTERVAL=60000                   # Sync policies every 1 minute
+SYNC_DEBOUNCE_MS=500                  # Debounce realtime sync triggers
 HEALTH_CHECK_INTERVAL=120000          # Health check every 2 minutes
 ```
 

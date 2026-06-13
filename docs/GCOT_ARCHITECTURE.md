@@ -164,6 +164,7 @@ NODE_IP=115.147.169.196
 FIREBASE_PROJECT_ID=your-project-id
 COREDNS_CONF_PATH=/etc/coredns/Corefile
 SYNC_INTERVAL=60000          # 1 minute
+SYNC_DEBOUNCE_MS=500         # realtime trigger debounce
 HEALTH_CHECK_INTERVAL=120000 # 2 minutes
 ```
 
@@ -172,13 +173,16 @@ HEALTH_CHECK_INTERVAL=120000 # 2 minutes
 1. Initialize Firebase connection
 2. Register node in Firestore
 3. Fetch initial policies
-4. **Loop every SYNC_INTERVAL**:
+4. **Watch Firestore policy changes**:
+    - React to `_system/policyManifest` and `_system/syncTrigger`
+    - Generate a new policies.zone file
+    - Flush affected Unbound cache entries
+5. **Loop every SYNC_INTERVAL as fallback**:
     - Query Firestore for policy changes
     - Generate new policies.zone file
-    - Reload CoreDNS
     - Check Unbound health
     - Report metrics to Firestore
-5. Handle graceful shutdown
+6. Handle graceful shutdown
 
 ### 4. Firebase Backend
 

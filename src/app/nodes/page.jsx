@@ -110,6 +110,7 @@ export default function NodesPage() {
       {
         lastTriggered: new Date().toISOString(),
         requiresSync: true,
+        reason: 'manual_sync',
       },
       { merge: true }
     );

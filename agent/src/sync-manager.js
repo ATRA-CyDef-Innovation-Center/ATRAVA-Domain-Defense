@@ -46,9 +46,11 @@ class PolicySyncManager {
         this.policyCache = policyCache;
         this.blockPageIp = process.env.BLOCK_PAGE_IP || process.env.NODE_IP || '127.0.0.1';
     }
-    async syncPolicies() {
+    async syncPolicies(options = {}) {
         try {
             console.log('[v0] Starting policy sync...');
+            const force = Boolean(options.force);
+            const changedDomain = this.cleanDomain(options.domain);
             // Fetch current policy manifest
             const manifestRef = this.db.collection('_system').doc('policyManifest');
             const manifestDoc = await manifestRef.get();
@@ -67,11 +69,16 @@ class PolicySyncManager {
                 currentVersion = (manifest === null || manifest === void 0 ? void 0 : manifest.timestamp) || new Date().toISOString();
             }
             // Check if we need to sync
-            if (currentVersion === this.lastSyncVersion) {
+            if (!force && currentVersion === this.lastSyncVersion) {
                 console.log('[v0] Policies already up-to-date');
-                return;
+                return true;
             }
-            console.log('[v0] New policy version detected:', currentVersion);
+            if (force) {
+                console.log('[v0] Force policy sync requested');
+            }
+            else {
+                console.log('[v0] New policy version detected:', currentVersion);
+            }
             // Fetch blacklist domains
             const blacklistSnapshot = await this.db
                 .collection('domains')
@@ -97,6 +104,11 @@ class PolicySyncManager {
             });
             // Update CoreDNS configuration
             await this.updateCoreDNSConfig(blacklistedDomains, whitelistedDomains);
+            await this.flushPolicyCaches({
+                changedDomain,
+                blacklistedDomains,
+                whitelistedDomains,
+            });
             // Update last sync version
             this.lastSyncVersion = currentVersion;
             // Update node sync status
@@ -108,6 +120,7 @@ class PolicySyncManager {
             console.log('[v0] Policy sync completed successfully');
             console.log(`[v0] Blacklisted domains: ${blacklistedDomains.length}`);
             console.log(`[v0] Whitelisted domains: ${whitelistedDomains.length}`);
+            return true;
         }
         catch (error) {
             console.error('[v0] Error during policy sync:', error);
@@ -122,6 +135,7 @@ class PolicySyncManager {
             catch (updateError) {
                 console.error('[v0] Failed to update node sync status:', updateError);
             }
+            return false;
         }
     }
     async updateCoreDNSConfig(blacklistedDomains, whitelistedDomains) {
@@ -144,20 +158,54 @@ class PolicySyncManager {
             fs.writeFileSync(zoneFilePath, zoneContent);
             console.log('[v0] CoreDNS configuration updated');
             console.log(`[v0] Zone file written to: ${zoneFilePath}`);
-            try {
-                (0, child_process_1.execSync)('unbound-control flush_zone .', {
-                    stdio: ['ignore', 'ignore', 'pipe'],
-                });
-                console.log('[v0] Unbound cache flushed after policy update');
-            }
-            catch (flushError) {
-                console.error('[v0] Failed to flush Unbound cache after policy update:', flushError);
-            }
         }
         catch (error) {
             console.error('[v0] Error updating CoreDNS config:', error);
             throw error;
         }
+    }
+    async flushPolicyCaches({ changedDomain, blacklistedDomains, whitelistedDomains }) {
+        const domainsToFlush = new Set();
+        if (changedDomain) {
+            domainsToFlush.add(changedDomain);
+        }
+        else {
+            [...blacklistedDomains.map((entry) => entry.domain), ...whitelistedDomains].forEach((domain) => {
+                const clean = this.cleanDomain(domain);
+                if (clean)
+                    domainsToFlush.add(clean);
+            });
+        }
+        try {
+            for (const domain of domainsToFlush) {
+                (0, child_process_1.execSync)(`unbound-control flush ${this.shellQuote(domain)}`, {
+                    stdio: ['ignore', 'ignore', 'pipe'],
+                });
+                (0, child_process_1.execSync)(`unbound-control flush ${this.shellQuote(`www.${domain}`)}`, {
+                    stdio: ['ignore', 'ignore', 'pipe'],
+                });
+            }
+            (0, child_process_1.execSync)('unbound-control flush_negative', {
+                stdio: ['ignore', 'ignore', 'pipe'],
+            });
+            console.log(`[v0] Unbound cache flushed for ${domainsToFlush.size} policy domains`);
+        }
+        catch (flushError) {
+            console.error('[v0] Failed to flush Unbound cache after policy update:', flushError);
+        }
+    }
+    cleanDomain(domain) {
+        const clean = String(domain || '')
+            .split(':')[0]
+            .trim()
+            .replace(/\.$/, '')
+            .toLowerCase();
+        if (!/^[a-z0-9.-]+$/.test(clean))
+            return '';
+        return clean.replace(/^\.+|\.+$/g, '');
+    }
+    shellQuote(value) {
+        return `'${String(value).replace(/'/g, "'\\''")}'`;
     }
 }
 exports.PolicySyncManager = PolicySyncManager;

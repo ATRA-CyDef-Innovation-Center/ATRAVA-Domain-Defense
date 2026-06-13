@@ -172,6 +172,8 @@ export default function DomainsPage() {
       {
         lastTriggered: timestamp,
         requiresSync: true,
+        reason: details.lastChange || 'domain_policy_change',
+        ...details,
       },
       { merge: true }
     );

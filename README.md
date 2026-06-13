@@ -315,12 +315,15 @@ FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key
 SYNC_INTERVAL=60000
+SYNC_DEBOUNCE_MS=500
 HEALTH_CHECK_INTERVAL=120000
 ```
 
 `BLOCK_PAGE_IP` is returned by DNS for blacklisted domains. The DNS node's block-page shim redirects HTTP requests to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL` with the original blocked domain in the `domain` query parameter.
 
 For HTTPS requests, publish TCP/443 and enable `BLOCK_PAGE_HTTPS_RESET_ENABLED` so blocked HTTPS attempts fail quickly instead of timing out. A browser-followable redirect for public HTTPS domains such as `facebook.com` is not possible with DNS-only blocking and no client-side TLS trust, because the browser validates the original hostname before it can read any redirect.
+
+Policy changes are also watched through Firestore realtime listeners. `SYNC_INTERVAL` remains a fallback poll interval; dashboard blacklist changes should trigger node sync within the debounce window plus DNS reload time.
 
 ## Firestore Schema
 

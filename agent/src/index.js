@@ -69,6 +69,10 @@ let syncManager;
 let healthMonitor;
 let unboundManager;
 let proxyServer;
+let policySyncTimer = null;
+let policySyncInFlight = false;
+let policySyncPending = null;
+const unsubscribePolicyListeners = [];
 async function reportRuntimeMetrics(policyCache) {
     await healthMonitor.checkHealth();
     await healthMonitor.reportMetrics();
@@ -85,6 +89,85 @@ async function reportRuntimeMetrics(policyCache) {
             blockRate: policyQueryStats.blockRate,
         });
     }
+}
+function mergeSyncOptions(current, next) {
+    if (!current)
+        return next;
+    return {
+        force: Boolean(current.force || next.force),
+        domain: next.domain || current.domain,
+        reason: next.reason || current.reason,
+        triggerRef: next.triggerRef || current.triggerRef,
+    };
+}
+function schedulePolicySync(options = {}) {
+    policySyncPending = mergeSyncOptions(policySyncPending, options);
+    if (policySyncTimer)
+        clearTimeout(policySyncTimer);
+    policySyncTimer = setTimeout(() => {
+        policySyncTimer = null;
+        runScheduledPolicySync().catch((error) => {
+            console.error('[v0] Scheduled policy sync failed:', error);
+        });
+    }, Number(process.env.SYNC_DEBOUNCE_MS || 500));
+}
+async function runScheduledPolicySync() {
+    if (policySyncInFlight)
+        return;
+    const options = policySyncPending;
+    policySyncPending = null;
+    if (!options)
+        return;
+    policySyncInFlight = true;
+    try {
+        console.log(`[v0] Running scheduled policy sync: ${options.reason || 'policy change'}`);
+        const success = await syncManager.syncPolicies(options);
+        if (success && options.triggerRef) {
+            await options.triggerRef.set({
+                requiresSync: false,
+                lastCompleted: new Date().toISOString(),
+                completedBy: NODE_ID,
+            }, { merge: true });
+        }
+    }
+    finally {
+        policySyncInFlight = false;
+        if (policySyncPending) {
+            await runScheduledPolicySync();
+        }
+    }
+}
+function startPolicyChangeListeners() {
+    const manifestRef = db.collection('_system').doc('policyManifest');
+    const triggerRef = db.collection('_system').doc('syncTrigger');
+    unsubscribePolicyListeners.push(manifestRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists)
+            return;
+        const data = snapshot.data() || {};
+        schedulePolicySync({
+            force: false,
+            domain: data.domain,
+            reason: data.lastChange || 'policyManifest update',
+        });
+    }, (error) => {
+        console.error('[v0] Policy manifest listener error:', error);
+    }));
+    unsubscribePolicyListeners.push(triggerRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists)
+            return;
+        const data = snapshot.data() || {};
+        if (!data.requiresSync)
+            return;
+        schedulePolicySync({
+            force: true,
+            domain: data.domain,
+            reason: data.reason || 'syncTrigger update',
+            triggerRef,
+        });
+    }, (error) => {
+        console.error('[v0] Sync trigger listener error:', error);
+    }));
+    console.log('[v0] Firestore policy change listeners started');
 }
 async function initializeFirebase() {
     console.log('[v0] Initializing Firebase...');
@@ -147,6 +230,7 @@ async function startAgent() {
     // Start initial sync
     console.log('[v0] Starting initial policy sync...');
     await syncManager.syncPolicies();
+    startPolicyChangeListeners();
     proxyServer = (0, proxy_server_1.startProxyServer)({ policyCache });
     await reportRuntimeMetrics(policyCache);
     // Start periodic syncing
@@ -173,6 +257,7 @@ async function startAgent() {
     // Handle graceful shutdown
     process.on('SIGTERM', async () => {
         console.log('[v0] Received SIGTERM, shutting down gracefully...');
+        unsubscribePolicyListeners.forEach((unsubscribe) => unsubscribe());
         if (proxyServer)
             proxyServer.close();
         await db.collection('nodes').doc(NODE_ID).update({
@@ -183,6 +268,7 @@ async function startAgent() {
     });
     process.on('SIGINT', async () => {
         console.log('[v0] Received SIGINT, shutting down gracefully...');
+        unsubscribePolicyListeners.forEach((unsubscribe) => unsubscribe());
         if (proxyServer)
             proxyServer.close();
         await db.collection('nodes').doc(NODE_ID).update({
