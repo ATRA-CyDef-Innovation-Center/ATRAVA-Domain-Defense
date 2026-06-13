@@ -64,6 +64,7 @@ const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '
 const COREDNS_CONF_PATH = process.env.COREDNS_CONF_PATH || '/etc/coredns/Corefile';
 const SYNC_INTERVAL = parseInt(process.env.SYNC_INTERVAL || '60000'); // 1 minute
 const HEALTH_CHECK_INTERVAL = parseInt(process.env.HEALTH_CHECK_INTERVAL || '120000'); // 2 minutes
+const PROXY_ENABLED = /^(1|true|yes|on)$/i.test(process.env.PROXY_ENABLED || '');
 let db;
 let syncManager;
 let healthMonitor;
@@ -231,7 +232,12 @@ async function startAgent() {
     console.log('[v0] Starting initial policy sync...');
     await syncManager.syncPolicies();
     startPolicyChangeListeners();
-    proxyServer = (0, proxy_server_1.startProxyServer)({ policyCache });
+    if (PROXY_ENABLED) {
+        proxyServer = (0, proxy_server_1.startProxyServer)({ policyCache });
+    }
+    else {
+        console.log('[proxy] Explicit proxy disabled. Set PROXY_ENABLED=true only for trusted client networks.');
+    }
     await reportRuntimeMetrics(policyCache);
     // Start periodic syncing
     setInterval(async () => {

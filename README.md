@@ -311,6 +311,7 @@ BLOCK_PAGE_URL=https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
 BLOCK_PAGE_PORT=80
 BLOCK_PAGE_HTTPS_RESET_ENABLED=true
 BLOCK_PAGE_HTTPS_PORT=443
+PROXY_ENABLED=false
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key

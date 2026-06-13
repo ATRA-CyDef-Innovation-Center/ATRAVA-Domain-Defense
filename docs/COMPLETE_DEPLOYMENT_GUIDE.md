@@ -16,7 +16,7 @@
 
 - Ubuntu 22.04 LTS or 24.04 LTS
 - 2+ vCPU, 4GB RAM, 20GB disk
-- Open ports: 53 (UDP/TCP), 80 (TCP for blocked HTTP redirect), 443 (TCP blocked HTTPS fail-fast listener), 5053 (UDP/TCP), 8080 (TCP), 8081 (TCP explicit proxy)
+- Open ports: 53 (UDP/TCP), 80 (TCP for blocked HTTP redirect), 443 (TCP blocked HTTPS fail-fast listener), 5053 (UDP/TCP), 8080 (TCP). Keep 8081 closed unless you intentionally deploy the explicit proxy for trusted client networks.
 - Internet access to pull Docker images and reach Firebase
 
 ### Step 1: Install Docker & Docker Compose
@@ -486,7 +486,8 @@ sudo ufw allow 443/tcp   # Blocked HTTPS fail-fast listener
 sudo ufw allow 5053/udp  # CoreDNS (internal only - restrict to internal network)
 sudo ufw allow 5053/tcp
 sudo ufw allow 8080/tcp  # CoreDNS health (restrict to monitoring host)
-sudo ufw allow 8081/tcp  # Explicit HTTP/HTTPS proxy (restrict to client networks)
+# Optional explicit HTTP/HTTPS proxy. Restrict this to trusted client CIDRs only.
+# sudo ufw allow from 10.0.0.0/8 to any port 8081 proto tcp
 sudo ufw enable
 ```
 
@@ -527,7 +528,7 @@ sudo tar -czf /backup/web-env-$(date +%Y%m%d).tar.gz /opt/gcot/.env.local
 
 | Component           | Host/IP         | Port                             | Status                       |
 | ------------------- | --------------- | -------------------------------- | ---------------------------- |
-| GCOT Node (Docker)  | 115.147.169.196 | 53, 80, 443, 5053, 8080, 8081    | Running via `docker compose` |
+| GCOT Node (Docker)  | 115.147.169.196 | 53, 80, 443, 5053, 8080          | Running via `docker compose` |
 | Web GUI (Next.js)   | 115.147.169.197 | 3000 (localhost), 80/443 (Nginx) | Running via `systemd`        |
 | Nginx Reverse Proxy | 115.147.169.197 | 80 → 443                         | Running                      |
 

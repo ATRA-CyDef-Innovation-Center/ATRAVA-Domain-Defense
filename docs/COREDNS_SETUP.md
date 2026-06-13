@@ -210,7 +210,8 @@ services:
             - '80:80/tcp' # Block-page HTTP redirect
             - '443:443/tcp' # Blocked HTTPS fail-fast listener
             - '8080:8080' # Health check
-            - '8081:8081/tcp' # Explicit proxy
+            # Enable only for trusted client networks; never expose as a public proxy.
+            # - '8081:8081/tcp'
         volumes:
             - ./coredns/Corefile:/etc/coredns/Corefile:ro
             - coredns-data:/var/lib/coredns
@@ -221,6 +222,8 @@ services:
             NODE_IP: 172.20.0.2
             BLOCK_PAGE_HTTPS_RESET_ENABLED: 'true'
             BLOCK_PAGE_HTTPS_PORT: 443
+            PROXY_ENABLED: 'false'
+            # PROXY_PORT: 8081
             NODE_ENV: production
         networks:
             - gcot-network
@@ -303,7 +306,7 @@ This is the expected no-root-CA behavior. The browser cannot display the ATRAVA 
 
 ### Explicit Proxy Check
 
-The agent also starts an explicit proxy on `PROXY_PORT` (`8081` by default). Clients must be configured to use this proxy; DNS settings alone do not route browser traffic through it.
+The agent can optionally start an explicit proxy when `PROXY_ENABLED=true`. Clients must be configured to use this proxy; DNS settings alone do not route browser traffic through it. Do not publish `8081` to the Internet. Bind or firewall it to trusted client networks only.
 
 ```bash
 # HTTP request through the proxy should receive a redirect to the NTC page
