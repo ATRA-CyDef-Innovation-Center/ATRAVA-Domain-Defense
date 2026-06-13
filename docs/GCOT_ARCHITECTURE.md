@@ -240,7 +240,7 @@ HEALTH_CHECK_INTERVAL=120000 # 2 minutes
 8. **Unbound** → Returns response to client
 9. **Client browser** → Connects to the block-page server, which redirects HTTP requests to the canonical NTC block page with the blocked domain in the URL
 
-DNS-only enforcement cannot transparently redirect HTTPS requests for arbitrary blocked domains without endpoint certificate trust or a proxy/endpoint agent. HTTPS clients validate the original hostname before any HTTP redirect can be sent.
+DNS-only enforcement cannot transparently redirect HTTPS requests for arbitrary blocked domains unless TLS first succeeds for the original hostname. Use the block-page TCP/443 listener with a private inspection CA trusted by managed endpoints, or use an explicit proxy/endpoint agent for HTTPS block pages. HTTPS clients validate the original hostname before any HTTP redirect can be sent.
 
 **Performance**: ~1-5ms per query (cached: <1ms)
 

@@ -95,7 +95,7 @@ The GCOT agent generates `/var/lib/coredns/policies.zone` automatically as a Cor
 # safe-cdn.net
 ```
 
-When a browser requests a blocked HTTP site, DNS points the domain to the block-page server on the DNS node. The server responds with a redirect to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL?domain=<blocked-domain>`, giving users an SSL-backed block notice without installing a certificate on the endpoint. HTTPS cannot be transparently redirected with DNS alone because the browser validates TLS for the original blocked hostname before it can receive an HTTP redirect.
+When a browser requests a blocked site, DNS points the domain to the block-page server on the DNS node. Plain HTTP requests are redirected to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL?domain=<blocked-domain>`. HTTPS requests can also be redirected on TCP/443, but only after TLS succeeds for the original blocked hostname. For public HTTPS domains such as `facebook.com`, that requires a private inspection CA configured on the DNS node and trusted by client devices.
 
 ## GCOT DNS Policy Agent Setup
 
@@ -124,6 +124,11 @@ NODE_NAME="Head Office DNS"           # Human-readable name
 NODE_IP=115.147.169.196                     # This node's IP address
 BLOCK_PAGE_IP=115.147.169.196              # IP returned for blacklisted domains
 BLOCK_PAGE_URL=https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
+BLOCK_PAGE_PORT=80
+BLOCK_PAGE_HTTPS_ENABLED=true
+BLOCK_PAGE_HTTPS_PORT=443
+BLOCK_PAGE_CA_CERT_FILE=/opt/gcot-agent/certs/block-page-ca.crt
+BLOCK_PAGE_CA_KEY_FILE=/opt/gcot-agent/certs/block-page-ca.key
 
 # Firebase Configuration
 FIREBASE_PROJECT_ID=your-project-id
@@ -203,22 +208,31 @@ services:
             - '53:53/udp'
             - '53:53/tcp'
             - '80:80/tcp' # Block-page HTTP redirect
+            - '443:443/tcp' # Block-page HTTPS redirect with trusted CA
             - '8080:8080' # Health check
             - '8081:8081/tcp' # Explicit proxy
         volumes:
             - ./coredns/Corefile:/etc/coredns/Corefile:ro
             - coredns-data:/var/lib/coredns
+            - ./agent/certs:/opt/gcot-agent/certs:ro
+            - block-page-certs:/var/lib/gcot-agent/block-page-certs
             - ./.env.local:/opt/gcot-agent/.env.local:ro
         environment:
             NODE_ID: node-docker-01
             NODE_NAME: Docker DNS Node
             NODE_IP: 172.20.0.2
+            BLOCK_PAGE_HTTPS_ENABLED: 'true'
+            BLOCK_PAGE_HTTPS_PORT: 443
+            BLOCK_PAGE_CERT_CACHE_DIR: /var/lib/gcot-agent/block-page-certs
+            BLOCK_PAGE_CA_CERT_FILE: /opt/gcot-agent/certs/block-page-ca.crt
+            BLOCK_PAGE_CA_KEY_FILE: /opt/gcot-agent/certs/block-page-ca.key
             NODE_ENV: production
         networks:
             - gcot-network
         restart: unless-stopped
 
 volumes:
+    block-page-certs:
     coredns-data:
 
 networks:
@@ -258,9 +272,9 @@ gcot-dns.company.com.  IN  A  10.0.3.50   ; B2
 curl http://localhost:8080/health
 ```
 
-### Block-Page HTTP Redirect Check
+### Block-Page Redirect Checks
 
-The block-page shim only handles plain HTTP. Verify it directly before testing in a browser:
+Verify the HTTP redirect directly before testing in a browser:
 
 ```bash
 # From the DNS node host
@@ -277,7 +291,22 @@ HTTP/1.1 302 Found
 Location: https://atrava-domain-defense.cisoasaservice.io/ntc-blocker?domain=facebook.com
 ```
 
-If these commands time out, TCP/80 is blocked by the host firewall, cloud firewall, or Docker port mapping. HTTPS sites with HSTS, including Facebook, cannot be transparently redirected by DNS-only enforcement; use an explicit proxy/agent for HTTPS block pages.
+If these commands time out, TCP/80 is blocked by the host firewall, cloud firewall, or Docker port mapping.
+
+For HTTPS redirects, clients must trust the CA configured in `BLOCK_PAGE_CA_CERT_FILE`; the agent uses that CA to issue a short-lived certificate for the blocked hostname seen in SNI:
+
+```bash
+curl -I --resolve facebook.com:443:115.147.169.196 --cacert /path/to/block-page-ca.crt https://facebook.com/
+```
+
+Expected response:
+
+```text
+HTTP/1.1 302 Found
+Location: https://atrava-domain-defense.cisoasaservice.io/ntc-blocker?domain=facebook.com
+```
+
+If the CA is not trusted by the client, browsers reject the TLS handshake before any redirect can be followed.
 
 ### Explicit Proxy Check
 

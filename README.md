@@ -308,6 +308,11 @@ NODE_NAME="Philippines DNS Node"
 NODE_IP=115.147.169.196
 BLOCK_PAGE_IP=115.147.169.196
 BLOCK_PAGE_URL=https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
+BLOCK_PAGE_PORT=80
+BLOCK_PAGE_HTTPS_ENABLED=true
+BLOCK_PAGE_HTTPS_PORT=443
+BLOCK_PAGE_CA_CERT_FILE=/opt/gcot-agent/certs/block-page-ca.crt
+BLOCK_PAGE_CA_KEY_FILE=/opt/gcot-agent/certs/block-page-ca.key
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key
@@ -315,9 +320,9 @@ SYNC_INTERVAL=60000
 HEALTH_CHECK_INTERVAL=120000
 ```
 
-`BLOCK_PAGE_IP` is returned by DNS for blacklisted domains. The DNS node's block-page shim redirects HTTP requests to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL` with the original blocked domain in the `domain` query parameter. This does not require installing a local root certificate on endpoint devices.
+`BLOCK_PAGE_IP` is returned by DNS for blacklisted domains. The DNS node's block-page shim redirects HTTP requests to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL` with the original blocked domain in the `domain` query parameter.
 
-The WebGUI page can use its normal public SSL certificate. Transparent HTTPS redirects for arbitrary blocked domains are still not possible with DNS-only enforcement, because the browser validates the original blocked hostname before any HTTP redirect can be sent.
+For HTTPS requests, publish TCP/443 and configure either `BLOCK_PAGE_CA_CERT_FILE` plus `BLOCK_PAGE_CA_KEY_FILE`, or a static `BLOCK_PAGE_TLS_CERT_FILE` plus `BLOCK_PAGE_TLS_KEY_FILE`. Browser-followable redirects for public HTTPS domains such as `facebook.com` require a private inspection CA that is trusted on client devices; otherwise the browser rejects TLS before it can receive the redirect.
 
 ## Firestore Schema
 

@@ -7,6 +7,7 @@ services:
         restart: unless-stopped
         ports:
             - '80:80/tcp'
+            - '443:443/tcp'
             - '53:53/udp'
             - '53:53/tcp'
             - '5053:5053/udp'
@@ -16,6 +17,8 @@ services:
         volumes:
             - ../coredns:/var/lib/coredns:rw
             - ../coredns/unbound.conf:/etc/unbound/unbound.conf:ro
+            - ../agent/certs:/opt/gcot-agent/certs:ro
+            - node-block-page-certs:/var/lib/gcot-agent/block-page-certs
             - node-unbound-data:/var/lib/unbound
             - node-unbound-logs:/var/log/unbound
         env_file:
@@ -25,11 +28,19 @@ services:
             BLOCK_PAGE_IP: 115.147.169.196
             BLOCK_PAGE_URL: https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
             BLOCK_PAGE_PORT: 80
+            BLOCK_PAGE_HTTPS_ENABLED: 'true'
+            BLOCK_PAGE_HTTPS_PORT: 443
+            BLOCK_PAGE_CERT_CACHE_DIR: /var/lib/gcot-agent/block-page-certs
+            # For browser-followable HTTPS redirects, place an enterprise CA
+            # trusted by client devices in ../agent/certs and set both paths.
+            # BLOCK_PAGE_CA_CERT_FILE: /opt/gcot-agent/certs/block-page-ca.crt
+            # BLOCK_PAGE_CA_KEY_FILE: /opt/gcot-agent/certs/block-page-ca.key
             PROXY_PORT: 8081
             NODE_ENV: production
         networks:
             - gcot-network
 volumes:
+    node-block-page-certs:
     node-unbound-data:
     node-unbound-logs:
 
