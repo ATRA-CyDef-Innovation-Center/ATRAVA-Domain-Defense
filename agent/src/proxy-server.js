@@ -75,6 +75,12 @@ function writeConnectBlock(socket, blockUrl, host) {
     socket.end()
 }
 
+function destroySocket(socket) {
+    if (socket && !socket.destroyed) {
+        socket.destroy()
+    }
+}
+
 function createProxyServer({ policyCache, blockPageUrl: canonicalBlockPageUrl }) {
     const server = http.createServer((clientReq, clientRes) => {
         const target = httpTargetFromRequest(clientReq)
@@ -112,11 +118,32 @@ function createProxyServer({ policyCache, blockPageUrl: canonicalBlockPageUrl })
             clientRes.end('Bad gateway')
         })
 
+        clientReq.on('error', (error) => {
+            console.error('[proxy] HTTP client error:', error.message)
+            proxyReq.destroy(error)
+        })
+
+        clientRes.on('error', (error) => {
+            console.error('[proxy] HTTP response error:', error.message)
+            proxyReq.destroy(error)
+        })
+
         clientReq.pipe(proxyReq)
     })
 
     server.on('connect', (req, clientSocket, head) => {
         const target = connectTargetFromRequest(req)
+        let upstreamSocket = null
+        let tunnelEstablished = false
+
+        clientSocket.on('error', (error) => {
+            console.error('[proxy] CONNECT client socket error:', error.message)
+            destroySocket(upstreamSocket)
+        })
+
+        clientSocket.on('close', () => {
+            destroySocket(upstreamSocket)
+        })
 
         if (!target.host || !Number.isFinite(target.port)) {
             clientSocket.end('HTTP/1.1 400 Bad Request\r\n\r\n')
@@ -132,7 +159,13 @@ function createProxyServer({ policyCache, blockPageUrl: canonicalBlockPageUrl })
             return
         }
 
-        const upstreamSocket = net.connect(target.port, target.host, () => {
+        upstreamSocket = net.connect(target.port, target.host, () => {
+            if (clientSocket.destroyed) {
+                destroySocket(upstreamSocket)
+                return
+            }
+
+            tunnelEstablished = true
             clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
             if (head && head.length) upstreamSocket.write(head)
             upstreamSocket.pipe(clientSocket)
@@ -141,7 +174,17 @@ function createProxyServer({ policyCache, blockPageUrl: canonicalBlockPageUrl })
 
         upstreamSocket.on('error', (error) => {
             console.error('[proxy] CONNECT proxy error:', error.message)
-            clientSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+            if (clientSocket.destroyed) return
+
+            if (tunnelEstablished) {
+                destroySocket(clientSocket)
+            } else {
+                clientSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+            }
+        })
+
+        upstreamSocket.on('close', () => {
+            destroySocket(clientSocket)
         })
     })
 

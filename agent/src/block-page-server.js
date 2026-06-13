@@ -277,6 +277,7 @@ function handleRequest(req, res) {
 
 function startHttpsResetServer() {
     const server = net.createServer((socket) => {
+        socket.on('error', () => {})
         socket.destroy()
     })
 
