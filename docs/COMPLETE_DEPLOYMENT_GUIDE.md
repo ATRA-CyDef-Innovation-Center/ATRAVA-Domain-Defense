@@ -16,7 +16,7 @@
 
 - Ubuntu 22.04 LTS or 24.04 LTS
 - 2+ vCPU, 4GB RAM, 20GB disk
-- Open ports: 53 (UDP/TCP), 80 (TCP for blocked HTTP redirect), 443 (TCP for blocked HTTPS redirect with trusted CA), 5053 (UDP/TCP), 8080 (TCP), 8081 (TCP explicit proxy)
+- Open ports: 53 (UDP/TCP), 80 (TCP for blocked HTTP redirect), 443 (TCP blocked HTTPS fail-fast listener), 5053 (UDP/TCP), 8080 (TCP), 8081 (TCP explicit proxy)
 - Internet access to pull Docker images and reach Firebase
 
 ### Step 1: Install Docker & Docker Compose
@@ -481,7 +481,7 @@ sudo ufw default deny incoming
 sudo ufw allow 53/udp    # DNS (clients)
 sudo ufw allow 53/tcp    # DNS (TCP fallback)
 sudo ufw allow 80/tcp    # Block-page HTTP redirect for blocked domains
-sudo ufw allow 443/tcp   # Block-page HTTPS redirect for blocked domains
+sudo ufw allow 443/tcp   # Blocked HTTPS fail-fast listener
 sudo ufw allow 5053/udp  # CoreDNS (internal only - restrict to internal network)
 sudo ufw allow 5053/tcp
 sudo ufw allow 8080/tcp  # CoreDNS health (restrict to monitoring host)

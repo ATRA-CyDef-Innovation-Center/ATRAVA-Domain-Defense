@@ -1,34 +1,19 @@
 'use strict'
 
-const childProcess = require('child_process')
-const fs = require('fs')
 const http = require('http')
-const https = require('https')
-const os = require('os')
-const path = require('path')
-const tls = require('tls')
+const net = require('net')
 
 const HTTP_PORT = readPort(process.env.BLOCK_PAGE_PORT, 80)
 const HTTPS_PORT = readPort(process.env.BLOCK_PAGE_HTTPS_PORT, 443)
-const HTTPS_ENABLED = readFlag(
-    process.env.BLOCK_PAGE_HTTPS_ENABLED,
-    Boolean(
-        process.env.BLOCK_PAGE_HTTPS_PORT ||
-            process.env.BLOCK_PAGE_TLS_CERT ||
-            process.env.BLOCK_PAGE_TLS_CERT_FILE ||
-            process.env.BLOCK_PAGE_CA_CERT ||
-            process.env.BLOCK_PAGE_CA_CERT_FILE
-    )
+const HTTPS_RESET_ENABLED = readFlag(
+    process.env.BLOCK_PAGE_HTTPS_RESET_ENABLED,
+    Boolean(process.env.BLOCK_PAGE_HTTPS_PORT)
 )
 const BLOCK_PAGE_URL =
     process.env.BLOCK_PAGE_URL || `http://blocked.local:${HTTP_PORT}/`
 const BLOCK_PAGE_HOST = safeHostname(new URL(BLOCK_PAGE_URL).hostname)
 const SUPPORT_EMAIL =
     process.env.BLOCK_PAGE_SUPPORT_EMAIL || 'support@atrava.local'
-const CERT_CACHE_DIR =
-    process.env.BLOCK_PAGE_CERT_CACHE_DIR ||
-    path.join(os.tmpdir(), 'atrava-block-page-certs')
-const CERT_DAYS = readPositiveInt(process.env.BLOCK_PAGE_CERT_DAYS, 7)
 
 function escapeHtml(value) {
     return String(value || '')
@@ -266,258 +251,6 @@ function readFlag(value, fallback) {
     return /^(1|true|yes|on)$/i.test(String(value))
 }
 
-function readPositiveInt(value, fallback) {
-    const number = Number(value || fallback)
-    if (!Number.isInteger(number) || number < 1) return fallback
-    return number
-}
-
-function readPemValue(value) {
-    return String(value || '').replace(/\\n/g, '\n')
-}
-
-function loadPem({ inlineEnv, fileEnv }) {
-    const inlineValue = readPemValue(process.env[inlineEnv])
-    if (inlineValue) return inlineValue
-
-    const filePath = process.env[fileEnv]
-    if (!filePath) return ''
-    return fs.readFileSync(filePath, 'utf8')
-}
-
-function writeInlinePemToCache({ inlineEnv, fileEnv, filename, mode }) {
-    if (process.env[fileEnv]) return process.env[fileEnv]
-
-    const inlineValue = readPemValue(process.env[inlineEnv])
-    if (!inlineValue) return ''
-
-    fs.mkdirSync(CERT_CACHE_DIR, { recursive: true })
-    const filePath = path.join(CERT_CACHE_DIR, filename)
-    fs.writeFileSync(filePath, inlineValue, { mode })
-    return filePath
-}
-
-function loadStaticTlsOptions() {
-    const cert = loadPem({
-        inlineEnv: 'BLOCK_PAGE_TLS_CERT',
-        fileEnv: 'BLOCK_PAGE_TLS_CERT_FILE',
-    })
-    const key = loadPem({
-        inlineEnv: 'BLOCK_PAGE_TLS_KEY',
-        fileEnv: 'BLOCK_PAGE_TLS_KEY_FILE',
-    })
-
-    if (cert && key) {
-        return {
-            cert,
-            key,
-            minVersion: 'TLSv1.2',
-        }
-    }
-
-    if (cert || key) {
-        console.warn(
-            '[block-page] Static HTTPS certificate is incomplete; set both BLOCK_PAGE_TLS_CERT(_FILE) and BLOCK_PAGE_TLS_KEY(_FILE).'
-        )
-    }
-
-    return null
-}
-
-function loadCaMaterial() {
-    const certFile = writeInlinePemToCache({
-        inlineEnv: 'BLOCK_PAGE_CA_CERT',
-        fileEnv: 'BLOCK_PAGE_CA_CERT_FILE',
-        filename: 'block-page-ca.crt',
-        mode: 0o644,
-    })
-    const keyFile = writeInlinePemToCache({
-        inlineEnv: 'BLOCK_PAGE_CA_KEY',
-        fileEnv: 'BLOCK_PAGE_CA_KEY_FILE',
-        filename: 'block-page-ca.key',
-        mode: 0o600,
-    })
-
-    if (certFile && keyFile) return { certFile, keyFile }
-
-    if (certFile || keyFile) {
-        console.warn(
-            '[block-page] HTTPS inspection CA is incomplete; set both BLOCK_PAGE_CA_CERT(_FILE) and BLOCK_PAGE_CA_KEY(_FILE).'
-        )
-    }
-
-    return null
-}
-
-function openssl(args) {
-    childProcess.execFileSync('openssl', args, {
-        stdio: ['ignore', 'ignore', 'pipe'],
-    })
-}
-
-function assertOpenSslAvailable() {
-    try {
-        openssl(['version'])
-    } catch (error) {
-        throw new Error(
-            `OpenSSL is required for BLOCK_PAGE_CA_CERT mode: ${error.message}`
-        )
-    }
-}
-
-function certBaseName(hostname) {
-    return optionalHostname(hostname).replace(/[^a-z0-9.-]/g, '_')
-}
-
-function certPaths(hostname) {
-    const base = path.join(CERT_CACHE_DIR, certBaseName(hostname))
-    return {
-        cert: `${base}.crt`,
-        csr: `${base}.csr`,
-        key: `${base}.key`,
-        config: `${base}.cnf`,
-    }
-}
-
-function isCertificateFresh(certPath) {
-    if (!fs.existsSync(certPath)) return false
-
-    try {
-        openssl(['x509', '-checkend', '3600', '-noout', '-in', certPath])
-        return true
-    } catch (_) {
-        return false
-    }
-}
-
-function writeOpenSslConfig(hostname, configPath) {
-    const config = [
-        '[req]',
-        'distinguished_name=req_distinguished_name',
-        'prompt=no',
-        'req_extensions=v3_req',
-        '',
-        '[req_distinguished_name]',
-        `CN=${hostname}`,
-        '',
-        '[v3_req]',
-        'keyUsage=critical,digitalSignature,keyEncipherment',
-        'extendedKeyUsage=serverAuth',
-        'subjectAltName=@alt_names',
-        '',
-        '[alt_names]',
-        `DNS.1=${hostname}`,
-        '',
-    ].join('\n')
-
-    fs.writeFileSync(configPath, config, { mode: 0o600 })
-}
-
-function ensureHostCertificate(hostname, caMaterial) {
-    const host = optionalHostname(hostname) || 'blocked.local'
-    const paths = certPaths(host)
-
-    fs.mkdirSync(CERT_CACHE_DIR, { recursive: true })
-
-    if (
-        fs.existsSync(paths.key) &&
-        fs.existsSync(paths.cert) &&
-        isCertificateFresh(paths.cert)
-    ) {
-        return {
-            cert: fs.readFileSync(paths.cert, 'utf8'),
-            key: fs.readFileSync(paths.key, 'utf8'),
-        }
-    }
-
-    writeOpenSslConfig(host, paths.config)
-    openssl(['genrsa', '-out', paths.key, '2048'])
-    openssl([
-        'req',
-        '-new',
-        '-key',
-        paths.key,
-        '-out',
-        paths.csr,
-        '-config',
-        paths.config,
-    ])
-    openssl([
-        'x509',
-        '-req',
-        '-in',
-        paths.csr,
-        '-CA',
-        caMaterial.certFile,
-        '-CAkey',
-        caMaterial.keyFile,
-        '-CAcreateserial',
-        '-out',
-        paths.cert,
-        '-days',
-        String(CERT_DAYS),
-        '-sha256',
-        '-extensions',
-        'v3_req',
-        '-extfile',
-        paths.config,
-    ])
-    fs.rmSync(paths.csr, { force: true })
-
-    return {
-        cert: fs.readFileSync(paths.cert, 'utf8'),
-        key: fs.readFileSync(paths.key, 'utf8'),
-    }
-}
-
-function loadCaTlsOptions(caMaterial) {
-    assertOpenSslAvailable()
-
-    const contextCache = new Map()
-    const fallbackHost = BLOCK_PAGE_HOST || 'blocked.local'
-    const fallbackCert = ensureHostCertificate(fallbackHost, caMaterial)
-    const fallbackContext = tls.createSecureContext(fallbackCert)
-
-    return {
-        ...fallbackCert,
-        minVersion: 'TLSv1.2',
-        SNICallback: (servername, callback) => {
-            const host = optionalHostname(servername)
-
-            if (!host) {
-                callback(null, fallbackContext)
-                return
-            }
-
-            try {
-                let context = contextCache.get(host)
-                if (!context) {
-                    context = tls.createSecureContext(
-                        ensureHostCertificate(host, caMaterial)
-                    )
-                    contextCache.set(host, context)
-                }
-                callback(null, context)
-            } catch (error) {
-                console.error(
-                    `[block-page] Failed to prepare TLS certificate for ${host}: ${error.message}`
-                )
-                callback(null, fallbackContext)
-            }
-        },
-    }
-}
-
-function loadHttpsOptions() {
-    const caMaterial = loadCaMaterial()
-    if (caMaterial) return loadCaTlsOptions(caMaterial)
-
-    const staticOptions = loadStaticTlsOptions()
-    if (staticOptions) return staticOptions
-
-    return null
-}
-
 function handleRequest(req, res) {
     const host = (req.headers.host || '').split(':')[0]
     const blockedHost = safeHostname(host)
@@ -542,6 +275,24 @@ function handleRequest(req, res) {
     res.end(page(queryDomain || blockedHost))
 }
 
+function startHttpsResetServer() {
+    const server = net.createServer((socket) => {
+        socket.destroy()
+    })
+
+    server.on('error', (error) => {
+        console.error(
+            `[block-page] HTTPS fail-fast listener error on port ${HTTPS_PORT}: ${error.message}`
+        )
+    })
+
+    server.listen(HTTPS_PORT, '0.0.0.0', () => {
+        console.log(
+            `[block-page] HTTPS fail-fast listener on 0.0.0.0:${HTTPS_PORT}; HTTPS block-page redirects are not possible without endpoint TLS trust or a proxy.`
+        )
+    })
+}
+
 const httpServer = http.createServer(handleRequest)
 
 httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
@@ -549,26 +300,6 @@ httpServer.listen(HTTP_PORT, '0.0.0.0', () => {
     console.log(`[block-page] Redirect target: ${BLOCK_PAGE_URL}`)
 })
 
-if (HTTPS_ENABLED) {
-    try {
-        const httpsOptions = loadHttpsOptions()
-
-        if (!httpsOptions) {
-            console.warn(
-                '[block-page] HTTPS listener not started. Configure BLOCK_PAGE_CA_CERT(_FILE)+BLOCK_PAGE_CA_KEY(_FILE) for trusted HTTPS redirects, or BLOCK_PAGE_TLS_CERT(_FILE)+BLOCK_PAGE_TLS_KEY(_FILE) for a static certificate.'
-            )
-        } else {
-            const httpsServer = https.createServer(httpsOptions, handleRequest)
-
-            httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
-                console.log(
-                    `[block-page] HTTPS redirect listening on 0.0.0.0:${HTTPS_PORT}`
-                )
-            })
-        }
-    } catch (error) {
-        console.error(
-            `[block-page] HTTPS listener failed to start: ${error.message}`
-        )
-    }
+if (HTTPS_RESET_ENABLED) {
+    startHttpsResetServer()
 }

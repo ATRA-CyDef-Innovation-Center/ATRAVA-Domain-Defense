@@ -95,7 +95,7 @@ The GCOT agent generates `/var/lib/coredns/policies.zone` automatically as a Cor
 # safe-cdn.net
 ```
 
-When a browser requests a blocked site, DNS points the domain to the block-page server on the DNS node. Plain HTTP requests are redirected to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL?domain=<blocked-domain>`. HTTPS requests can also be redirected on TCP/443, but only after TLS succeeds for the original blocked hostname. For public HTTPS domains such as `facebook.com`, that requires a private inspection CA configured on the DNS node and trusted by client devices.
+When a browser requests a blocked site, DNS points the domain to the block-page server on the DNS node. Plain HTTP requests are redirected to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL?domain=<blocked-domain>`. HTTPS requests cannot be redirected to the blocker page with DNS-only blocking and no client-side TLS trust, because the browser validates the original blocked hostname before it can read any redirect. The agent can listen on TCP/443 and close blocked HTTPS attempts immediately so users do not wait on a timeout.
 
 ## GCOT DNS Policy Agent Setup
 
@@ -125,10 +125,8 @@ NODE_IP=115.147.169.196                     # This node's IP address
 BLOCK_PAGE_IP=115.147.169.196              # IP returned for blacklisted domains
 BLOCK_PAGE_URL=https://atrava-domain-defense.cisoasaservice.io/ntc-blocker
 BLOCK_PAGE_PORT=80
-BLOCK_PAGE_HTTPS_ENABLED=true
+BLOCK_PAGE_HTTPS_RESET_ENABLED=true
 BLOCK_PAGE_HTTPS_PORT=443
-BLOCK_PAGE_CA_CERT_FILE=/opt/gcot-agent/certs/block-page-ca.crt
-BLOCK_PAGE_CA_KEY_FILE=/opt/gcot-agent/certs/block-page-ca.key
 
 # Firebase Configuration
 FIREBASE_PROJECT_ID=your-project-id
@@ -208,31 +206,25 @@ services:
             - '53:53/udp'
             - '53:53/tcp'
             - '80:80/tcp' # Block-page HTTP redirect
-            - '443:443/tcp' # Block-page HTTPS redirect with trusted CA
+            - '443:443/tcp' # Blocked HTTPS fail-fast listener
             - '8080:8080' # Health check
             - '8081:8081/tcp' # Explicit proxy
         volumes:
             - ./coredns/Corefile:/etc/coredns/Corefile:ro
             - coredns-data:/var/lib/coredns
-            - ./agent/certs:/opt/gcot-agent/certs:ro
-            - block-page-certs:/var/lib/gcot-agent/block-page-certs
             - ./.env.local:/opt/gcot-agent/.env.local:ro
         environment:
             NODE_ID: node-docker-01
             NODE_NAME: Docker DNS Node
             NODE_IP: 172.20.0.2
-            BLOCK_PAGE_HTTPS_ENABLED: 'true'
+            BLOCK_PAGE_HTTPS_RESET_ENABLED: 'true'
             BLOCK_PAGE_HTTPS_PORT: 443
-            BLOCK_PAGE_CERT_CACHE_DIR: /var/lib/gcot-agent/block-page-certs
-            BLOCK_PAGE_CA_CERT_FILE: /opt/gcot-agent/certs/block-page-ca.crt
-            BLOCK_PAGE_CA_KEY_FILE: /opt/gcot-agent/certs/block-page-ca.key
             NODE_ENV: production
         networks:
             - gcot-network
         restart: unless-stopped
 
 volumes:
-    block-page-certs:
     coredns-data:
 
 networks:
@@ -293,20 +285,19 @@ Location: https://atrava-domain-defense.cisoasaservice.io/ntc-blocker?domain=fac
 
 If these commands time out, TCP/80 is blocked by the host firewall, cloud firewall, or Docker port mapping.
 
-For HTTPS redirects, clients must trust the CA configured in `BLOCK_PAGE_CA_CERT_FILE`; the agent uses that CA to issue a short-lived certificate for the blocked hostname seen in SNI:
+For HTTPS requests, verify that TCP/443 fails quickly instead of timing out:
 
 ```bash
-curl -I --resolve facebook.com:443:115.147.169.196 --cacert /path/to/block-page-ca.crt https://facebook.com/
+curl -vk --connect-timeout 5 --resolve facebook.com:443:115.147.169.196 https://facebook.com/
 ```
 
-Expected response:
+Expected behavior:
 
 ```text
-HTTP/1.1 302 Found
-Location: https://atrava-domain-defense.cisoasaservice.io/ntc-blocker?domain=facebook.com
+curl exits quickly with a TLS/connect error instead of waiting until timeout.
 ```
 
-If the CA is not trusted by the client, browsers reject the TLS handshake before any redirect can be followed.
+This is the expected no-root-CA behavior. The browser cannot display the ATRAVA blocker page for arbitrary HTTPS domains without a trusted endpoint mechanism, but it should no longer hang on `ERR_CONNECTION_TIMED_OUT`.
 
 ### Explicit Proxy Check
 
