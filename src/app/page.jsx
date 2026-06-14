@@ -30,9 +30,24 @@ function nodeQueryCount(node) {
   return Math.max(
     Number(node.unboundQueries || 0),
     Number(node.queriesPerDay || 0),
+    Number(node.policyTotalQueries || 0),
+    Number(node.blockedQueries || 0)
+  );
+}
+
+function nodePolicyQueryCount(node) {
+  return Math.max(
+    Number(node.policyTotalQueries || 0),
+    Number(node.allowedQueries || 0) + Number(node.blockedQueries || 0),
     Number(node.sampledQueries || 0),
     Number(node.blockedQueries || 0)
   );
+}
+
+function nodeAllowedCount(node) {
+  const allowed = Number(node.allowedQueries || 0);
+  if (allowed > 0) return allowed;
+  return Math.max(nodePolicyQueryCount(node) - nodeBlockedCount(node), 0);
 }
 
 function nodeBlockedCount(node) {
@@ -85,9 +100,9 @@ export default function DashboardPage() {
 
   const dashboardStats = useMemo(() => {
     const totalQueries = nodes.reduce((sum, node) => sum + nodeQueryCount(node), 0);
+    const policyTotalQueries = nodes.reduce((sum, node) => sum + nodePolicyQueryCount(node), 0);
     const blockedQueries = nodes.reduce((sum, node) => sum + nodeBlockedCount(node), 0);
-    const sampledQueries = nodes.reduce((sum, node) => sum + Number(node.sampledQueries || 0), 0);
-    const rateDenominator = sampledQueries || totalQueries;
+    const rateDenominator = policyTotalQueries || totalQueries;
     const blockRate = rateDenominator > 0 ? (blockedQueries / rateDenominator) * 100 : 0;
     const onlineNodes = nodes.filter((node) => node.status === 'online').length;
     const cacheHitRates = nodes
@@ -101,16 +116,16 @@ export default function DashboardPage() {
       {
         title: 'Total DNS Queries',
         value: totalQueries.toLocaleString(),
-        description: 'Resolver counter from active nodes',
+        description: 'Cumulative activity from active nodes',
         icon: Globe,
         color: 'text-blue-500',
       },
       {
         title: 'Policy-Matched Queries',
         value: Math.round(blockedQueries).toLocaleString(),
-        description: sampledQueries
-          ? `From ${sampledQueries.toLocaleString()} recent DNS log lines`
-          : 'Reported by node telemetry',
+        description: policyTotalQueries
+          ? `From ${policyTotalQueries.toLocaleString()} cumulative DNS queries`
+          : 'Cumulative DNS log counter',
         icon: ShieldAlert,
         color: 'text-red-500',
       },
@@ -146,11 +161,8 @@ export default function DashboardPage() {
   }, [blacklistEntries.length, nodes]);
 
   const queryMixData = useMemo(() => {
-    const totalQueries = nodes.reduce((sum, node) => sum + nodeQueryCount(node), 0);
+    const allowedQueries = nodes.reduce((sum, node) => sum + nodeAllowedCount(node), 0);
     const blockedQueries = nodes.reduce((sum, node) => sum + nodeBlockedCount(node), 0);
-    const sampledQueries = nodes.reduce((sum, node) => sum + Number(node.sampledQueries || 0), 0);
-    const denominator = sampledQueries || totalQueries;
-    const allowedQueries = Math.max(denominator - blockedQueries, 0);
 
     return [
       { name: 'Allowed', value: allowedQueries, color: '#22c55e' },
@@ -164,8 +176,9 @@ export default function DashboardPage() {
         .map((node) => ({
           name: node.name || node.nodeId || node.id,
           queries: nodeQueryCount(node),
+          allowed: nodeAllowedCount(node),
           blocked: nodeBlockedCount(node),
-          sampled: Number(node.sampledQueries || 0),
+          policyQueries: nodePolicyQueryCount(node),
           blockRate: parsePercent(node.blockRate),
           cacheHitRate: Number(node.unboundCacheHitRate || 0),
           status: node.status || 'unknown',
@@ -345,16 +358,16 @@ export default function DashboardPage() {
                           </div>
                           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                             <div>
-                              <p className="text-xs text-muted-foreground">Queries</p>
+                              <p className="text-xs text-muted-foreground">Resolver Queries</p>
                               <p className="font-semibold text-foreground">{node.queries.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Allowed</p>
+                              <p className="font-semibold text-foreground">{node.allowed.toLocaleString()}</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Policy Matches</p>
                               <p className="font-semibold text-foreground">{node.blocked.toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Sampled</p>
-                              <p className="font-semibold text-foreground">{node.sampled.toLocaleString()}</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Block Rate</p>

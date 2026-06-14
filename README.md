@@ -328,6 +328,8 @@ For HTTPS requests, publish TCP/443 and enable `BLOCK_PAGE_HTTPS_RESET_ENABLED` 
 
 Policy changes are also watched through Firestore realtime listeners. `SYNC_INTERVAL` remains a fallback poll interval; dashboard blacklist changes should trigger node sync within the debounce window plus DNS reload time.
 
+Node telemetry keeps cumulative allowed and policy-matched counters by reading each new Unbound query log line once. On agent startup, the current log file is scanned once to initialize the counter; later health checks only process appended log lines.
+
 ## Firestore Schema
 
 ### Collections

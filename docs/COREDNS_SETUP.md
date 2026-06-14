@@ -148,6 +148,10 @@ SYNC_DEBOUNCE_MS=500                  # Debounce realtime sync triggers
 HEALTH_CHECK_INTERVAL=120000          # Health check every 2 minutes
 ```
 
+### Telemetry Counters
+
+The agent reports cumulative `allowedQueries`, `blockedQueries`, and `policyTotalQueries` from the Unbound query log. It scans the current log file once at startup, then keeps a byte offset and counts only newly appended query lines during health checks. If the log rotates or is truncated, the agent starts reading from the beginning of the new file while keeping the existing cumulative counters.
+
 ### Firebase Service Account
 
 1. Go to Firebase Console → Settings → Service Accounts

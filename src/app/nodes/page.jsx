@@ -41,9 +41,24 @@ function nodeQueryCount(node) {
   return Math.max(
     Number(node.unboundQueries || 0),
     Number(node.queriesPerDay || 0),
+    Number(node.policyTotalQueries || 0),
+    Number(node.blockedQueries || 0)
+  );
+}
+
+function nodePolicyQueryCount(node) {
+  return Math.max(
+    Number(node.policyTotalQueries || 0),
+    Number(node.allowedQueries || 0) + Number(node.blockedQueries || 0),
     Number(node.sampledQueries || 0),
     Number(node.blockedQueries || 0)
   );
+}
+
+function nodeAllowedCount(node) {
+  const allowed = Number(node.allowedQueries || 0);
+  if (allowed > 0) return allowed;
+  return Math.max(nodePolicyQueryCount(node) - Number(node.blockedQueries || 0), 0);
 }
 
 export default function NodesPage() {
@@ -152,6 +167,7 @@ export default function NodesPage() {
                 sortedNodes.map((node) => {
                   const blockRate = parsePercent(node.blockRate);
                   const queries = nodeQueryCount(node);
+                  const allowedQueries = nodeAllowedCount(node);
                   const coreDnsStatus = node.corednsStatus || node.status || 'unknown';
                   const unboundStatus = node.unboundStatus || 'unknown';
 
@@ -187,8 +203,12 @@ export default function NodesPage() {
                             <p className="font-semibold text-foreground">{node.version || 'Unknown'}</p>
                           </div>
                           <div className="rounded-lg border border-border bg-secondary p-3">
-                            <p className="mb-1 text-xs text-muted-foreground">Queries Today</p>
+                            <p className="mb-1 text-xs text-muted-foreground">Resolver Queries</p>
                             <p className="font-semibold text-foreground">{queries.toLocaleString()}</p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-secondary p-3">
+                            <p className="mb-1 text-xs text-muted-foreground">Allowed Queries</p>
+                            <p className="font-semibold text-foreground">{allowedQueries.toLocaleString()}</p>
                           </div>
                           <div className="rounded-lg border border-border bg-secondary p-3">
                             <p className="mb-1 text-xs text-muted-foreground">Block Rate</p>

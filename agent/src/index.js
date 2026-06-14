@@ -79,15 +79,21 @@ async function reportRuntimeMetrics(policyCache) {
     await healthMonitor.reportMetrics();
     const unboundHealth = await unboundManager.getHealthReport();
     if (unboundHealth.isRunning) {
-        const policyQueryStats = await unboundManager.getPolicyQueryStats(policyCache);
+        const policyCounters = await unboundManager.getCumulativePolicyCounters(policyCache);
         await db.collection('nodes').doc(NODE_ID).update({
             unboundStatus: 'online',
             unboundCacheHitRate: unboundHealth.cacheStats.hitRate,
             unboundQueries: unboundHealth.queryStats.totalQueries,
             queriesPerDay: unboundHealth.queryStats.totalQueries,
-            blockedQueries: policyQueryStats.blockedQueries,
-            sampledQueries: policyQueryStats.sampledQueries,
-            blockRate: policyQueryStats.blockRate,
+            policyTotalQueries: policyCounters.totalQueries,
+            allowedQueries: policyCounters.allowedQueries,
+            blockedQueries: policyCounters.blockedQueries,
+            sampledQueries: policyCounters.totalQueries,
+            policyCounterNewQueries: policyCounters.newQueries,
+            policyCounterNewBlockedQueries: policyCounters.newBlockedQueries,
+            policyCounterStartedAt: policyCounters.counterStartedAt,
+            policyCounterLogOffset: policyCounters.logOffset,
+            blockRate: policyCounters.blockRate,
         });
     }
 }
@@ -205,6 +211,9 @@ async function registerNode() {
             lastSync: new Date().toISOString(),
             uptime: 100,
             queriesPerDay: 0,
+            policyTotalQueries: 0,
+            allowedQueries: 0,
+            blockedQueries: 0,
             blockRate: 0,
         };
         await db.collection('nodes').doc(NODE_ID).set(nodeData, { merge: true });

@@ -79,6 +79,8 @@ SYNC_DEBOUNCE_MS=500
 HEALTH_CHECK_INTERVAL=120000
 ```
 
+Telemetry counters are cumulative. The DNS agent scans the current Unbound query log once at startup, then counts only newly appended query lines into `allowedQueries`, `blockedQueries`, and `policyTotalQueries`.
+
 **Note:** To get Firebase credentials:
 
 1. Go to Firebase Console → Settings → Service Accounts

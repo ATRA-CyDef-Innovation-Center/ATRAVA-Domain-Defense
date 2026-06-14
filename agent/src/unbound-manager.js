@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UnboundManager = void 0;
 const child_process_1 = require("child_process");
+const fs = require("fs");
 /**
  * Manages Unbound DNS resolver configuration and monitoring
  * Works in tandem with CoreDNS for policy enforcement
@@ -10,6 +11,18 @@ class UnboundManager {
     constructor(unboundControlCmd = 'unbound-control', logFile = '/var/log/unbound/unbound.log') {
         this.unboundControlCmd = unboundControlCmd;
         this.logFile = logFile;
+        this.policyCounters = {
+            totalQueries: 0,
+            allowedQueries: 0,
+            blockedQueries: 0,
+        };
+        this.policyCounterStartedAt = new Date().toISOString();
+        this.logCursor = {
+            fileId: '',
+            offset: 0,
+            pending: '',
+            initialized: false,
+        };
     }
     /**
      * Get Unbound server status
@@ -151,34 +164,135 @@ class UnboundManager {
         }
     }
     /**
-     * Estimate DNS policy hits from recent Unbound query logs.
+     * Count new Unbound query log lines once and return cumulative policy counters.
      */
-    async getPolicyQueryStats(policyCache, lines = 5000) {
+    async getCumulativePolicyCounters(policyCache) {
         try {
-            const logs = await this.getTailLogs(lines);
-            let sampledQueries = 0;
-            let blockedQueries = 0;
-            logs.forEach((line) => {
-                const match = line.match(/\bquery:\s+\S+\s+(\S+)\s+\S+\s+IN\b/);
-                if (!match)
-                    return;
-                const domain = match[1].replace(/\.$/, '').toLowerCase();
-                sampledQueries += 1;
-                if (policyCache.isDomainBlacklisted(domain)) {
-                    blockedQueries += 1;
-                }
-            });
-            const blockRate = sampledQueries > 0 ? (blockedQueries / sampledQueries) * 100 : 0;
+            const delta = this.readNewPolicyQueryCounts(policyCache);
+            this.policyCounters.totalQueries += delta.totalQueries;
+            this.policyCounters.allowedQueries += delta.allowedQueries;
+            this.policyCounters.blockedQueries += delta.blockedQueries;
+            const blockRate = this.policyCounters.totalQueries > 0
+                ? (this.policyCounters.blockedQueries / this.policyCounters.totalQueries) * 100
+                : 0;
             return {
-                sampledQueries,
-                blockedQueries,
+                totalQueries: this.policyCounters.totalQueries,
+                allowedQueries: this.policyCounters.allowedQueries,
+                blockedQueries: this.policyCounters.blockedQueries,
+                newQueries: delta.totalQueries,
+                newAllowedQueries: delta.allowedQueries,
+                newBlockedQueries: delta.blockedQueries,
                 blockRate: parseFloat(blockRate.toFixed(2)),
+                counterStartedAt: this.policyCounterStartedAt,
+                logOffset: this.logCursor.offset,
             };
         }
         catch (error) {
-            console.error('[v0] Policy query stats retrieval failed:', error);
-            return { sampledQueries: 0, blockedQueries: 0, blockRate: 0 };
+            console.error('[v0] Cumulative policy counter update failed:', error);
+            const blockRate = this.policyCounters.totalQueries > 0
+                ? (this.policyCounters.blockedQueries / this.policyCounters.totalQueries) * 100
+                : 0;
+            return {
+                totalQueries: this.policyCounters.totalQueries,
+                allowedQueries: this.policyCounters.allowedQueries,
+                blockedQueries: this.policyCounters.blockedQueries,
+                newQueries: 0,
+                newAllowedQueries: 0,
+                newBlockedQueries: 0,
+                blockRate: parseFloat(blockRate.toFixed(2)),
+                counterStartedAt: this.policyCounterStartedAt,
+                logOffset: this.logCursor.offset,
+            };
         }
+    }
+    /**
+     * Backward-compatible wrapper for older callers.
+     */
+    async getPolicyQueryStats(policyCache) {
+        const counters = await this.getCumulativePolicyCounters(policyCache);
+        return {
+            sampledQueries: counters.totalQueries,
+            blockedQueries: counters.blockedQueries,
+            blockRate: counters.blockRate,
+        };
+    }
+    readNewPolicyQueryCounts(policyCache) {
+        const empty = { totalQueries: 0, allowedQueries: 0, blockedQueries: 0 };
+        let stat;
+        try {
+            stat = fs.statSync(this.logFile);
+        }
+        catch (error) {
+            if (error && error.code !== 'ENOENT') {
+                console.error('[v0] Unable to stat Unbound log file:', error);
+            }
+            return empty;
+        }
+        const fileId = this.fileId(stat);
+        if (!this.logCursor.initialized ||
+            this.logCursor.fileId !== fileId ||
+            stat.size < this.logCursor.offset) {
+            if (this.logCursor.initialized) {
+                console.log('[v0] Unbound log rotated or truncated; continuing cumulative counters from new log file');
+            }
+            this.logCursor = {
+                fileId,
+                offset: 0,
+                pending: '',
+                initialized: true,
+            };
+        }
+        if (stat.size <= this.logCursor.offset) {
+            return empty;
+        }
+        const counts = { ...empty };
+        const fd = fs.openSync(this.logFile, 'r');
+        try {
+            const buffer = Buffer.alloc(64 * 1024);
+            let position = this.logCursor.offset;
+            let pending = this.logCursor.pending || '';
+            while (position < stat.size) {
+                const remaining = stat.size - position;
+                const bytesRead = fs.readSync(fd, buffer, 0, Math.min(buffer.length, remaining), position);
+                if (bytesRead <= 0)
+                    break;
+                position += bytesRead;
+                const chunk = pending + buffer.toString('utf8', 0, bytesRead);
+                const lines = chunk.split('\n');
+                pending = lines.pop() || '';
+                lines.forEach((line) => {
+                    this.countPolicyQueryLine(line.replace(/\r$/, ''), policyCache, counts);
+                });
+            }
+            this.logCursor.offset = position;
+            this.logCursor.pending = pending;
+        }
+        finally {
+            fs.closeSync(fd);
+        }
+        return counts;
+    }
+    countPolicyQueryLine(line, policyCache, counts) {
+        const domain = this.queryDomainFromLogLine(line);
+        if (!domain)
+            return;
+        counts.totalQueries += 1;
+        const isBlocked = !policyCache.isDomainWhitelisted(domain) && policyCache.isDomainBlacklisted(domain);
+        if (isBlocked) {
+            counts.blockedQueries += 1;
+        }
+        else {
+            counts.allowedQueries += 1;
+        }
+    }
+    queryDomainFromLogLine(line) {
+        const match = String(line || '').match(/\bquery:\s+\S+\s+(\S+)\s+\S+\s+IN\b/);
+        if (!match)
+            return '';
+        return match[1].replace(/\.$/, '').toLowerCase();
+    }
+    fileId(stat) {
+        return `${stat.dev || 0}:${stat.ino || 0}:${stat.birthtimeMs || 0}`;
     }
     /**
      * Check if Unbound is running
