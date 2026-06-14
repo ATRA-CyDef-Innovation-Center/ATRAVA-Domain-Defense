@@ -79,9 +79,14 @@ Create `/etc/coredns/Corefile`:
 }
 ```
 
-### Policy Zone File
+### Policy Files
 
-The GCOT agent generates `/var/lib/coredns/policies.zone` automatically as a CoreDNS `hosts` file. Blacklisted domains resolve to the configured block-page IP:
+The GCOT agent generates two policy files:
+
+- `/var/lib/coredns/policies.zone` keeps exact-host entries for compatibility.
+- `/var/lib/coredns/policies.coredns` contains CoreDNS `template` rules so parent-domain entries also apply to matching subdomains.
+
+Blacklisted domains resolve to the configured block-page IP:
 
 ```text
 # GCOT policy hosts file
@@ -95,6 +100,8 @@ The GCOT agent generates `/var/lib/coredns/policies.zone` automatically as a Cor
 # trusted-vendor.com
 # safe-cdn.net
 ```
+
+For example, a blacklist entry for `youtube.com` covers DNS queries for `youtube.com` and `www.youtube.com`. Sites with large platform footprints may still require related domains such as media/CDN hostnames if those hostnames are outside the blocked parent domain.
 
 When a browser requests a blocked site, DNS points the domain to the block-page server on the DNS node. Plain HTTP requests are redirected to the WebGUI-hosted NTC page at `BLOCK_PAGE_URL?domain=<blocked-domain>`. HTTPS requests cannot be redirected to the blocker page with DNS-only blocking and no client-side TLS trust, because the browser validates the original blocked hostname before it can read any redirect. The agent can listen on TCP/443 and close blocked HTTPS attempts immediately so users do not wait on a timeout.
 
@@ -361,6 +368,14 @@ coredns -conf /etc/coredns/Corefile -test
 
 # Check zone file
 cat /var/lib/coredns/policies.zone
+cat /var/lib/coredns/policies.coredns
+```
+
+If a blocked site still opens in a browser, verify the client is actually using the DNS node and disable browser Secure DNS/DoH for the test. Also clear the browser and OS DNS cache, then test the node directly:
+
+```bash
+dig @115.147.169.196 youtube.com
+dig @115.147.169.196 www.youtube.com
 ```
 
 ### High memory usage

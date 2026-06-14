@@ -195,7 +195,7 @@ export default function NodesPage() {
                             <p className="font-semibold text-foreground">{blockRate.toFixed(1)}%</p>
                           </div>
                           <div className="rounded-lg border border-border bg-secondary p-3">
-                            <p className="mb-1 text-xs text-muted-foreground">Blocked Queries</p>
+                            <p className="mb-1 text-xs text-muted-foreground">Policy Matches</p>
                             <p className="font-semibold text-foreground">{Number(node.blockedQueries || 0).toLocaleString()}</p>
                           </div>
                           <div className="rounded-lg border border-border bg-secondary p-3">

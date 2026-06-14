@@ -23,17 +23,40 @@ class PolicyCache {
         return this.policies.whitelist.some((whitelistedDomain) => this.matchDomain(domain, whitelistedDomain));
     }
     matchDomain(domain, pattern) {
-        const domainLower = domain.toLowerCase();
-        const patternLower = pattern.toLowerCase();
+        const domainLower = this.cleanDomain(domain);
+        const patternLower = this.cleanDomain(pattern);
+        if (!domainLower || !patternLower) {
+            return false;
+        }
         if (domainLower === patternLower) {
             return true;
         }
-        // Handle subdomain matching (e.g., *.example.com matches sub.example.com)
+        // A parent-domain policy should cover its subdomains as well.
+        if (domainLower.endsWith('.' + patternLower)) {
+            return true;
+        }
         if (patternLower.startsWith('*.')) {
             const baseDomain = patternLower.substring(2);
             return domainLower.endsWith('.' + baseDomain) || domainLower === baseDomain;
         }
         return false;
+    }
+    cleanDomain(domain) {
+        let clean = String(domain || '').trim().toLowerCase();
+        if (!clean)
+            return '';
+        if (clean.includes('://') || /[/?#]/.test(clean)) {
+            try {
+                clean = new URL(clean.includes('://') ? clean : `http://${clean}`).hostname;
+            }
+            catch {
+                clean = clean.split(/[/?#]/)[0];
+            }
+        }
+        clean = clean.split(':')[0].replace(/\.$/, '');
+        if (!/^(\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(clean))
+            return '';
+        return clean.replace(/^\.+|\.+$/g, '');
     }
     getStats() {
         return {

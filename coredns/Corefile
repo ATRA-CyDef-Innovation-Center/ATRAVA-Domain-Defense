@@ -11,6 +11,10 @@
     
     # Health check endpoint (for Kubernetes liveness probes)
     health :8080
+
+    # Generated template rules apply parent-domain blacklist entries to
+    # matching subdomains, for example youtube.com and www.youtube.com.
+    import /var/lib/coredns/policies.coredns
     
     # Load blacklist policies from a generated hosts file.
     # Unlisted domains fall through to upstream DNS.

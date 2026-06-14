@@ -16,15 +16,24 @@ class UnboundManager {
      */
     async getStatus() {
         try {
-            const statsOutput = (0, child_process_1.execSync)(`${this.unboundControlCmd} stats`, {
+            const statsOutput = (0, child_process_1.execSync)(`${this.unboundControlCmd} stats_noreset`, {
                 encoding: 'utf-8',
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
             return this.parseStats(statsOutput);
         }
         catch (error) {
-            console.error('[v0] Unbound status check failed:', error);
-            return null;
+            try {
+                const statsOutput = (0, child_process_1.execSync)(`${this.unboundControlCmd} stats`, {
+                    encoding: 'utf-8',
+                    stdio: ['pipe', 'pipe', 'pipe'],
+                });
+                return this.parseStats(statsOutput);
+            }
+            catch (fallbackError) {
+                console.error('[v0] Unbound status check failed:', fallbackError);
+                return null;
+            }
         }
     }
     /**

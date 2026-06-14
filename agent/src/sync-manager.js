@@ -45,6 +45,7 @@ class PolicySyncManager {
         this.coreDnsConfigPath = coreDnsConfigPath;
         this.policyCache = policyCache;
         this.blockPageIp = process.env.BLOCK_PAGE_IP || process.env.NODE_IP || '127.0.0.1';
+        this.blockPageIpv6 = process.env.BLOCK_PAGE_IPV6 || '';
     }
     async syncPolicies(options = {}) {
         try {
@@ -85,17 +86,14 @@ class PolicySyncManager {
                 .doc('blacklist')
                 .collection('entries')
                 .get();
-            const blacklistedDomains = blacklistSnapshot.docs.map((doc) => ({
-                domain: doc.data().domain,
-                threatLevel: doc.data().threatLevel,
-            }));
+            const blacklistedDomains = this.normalizeBlacklistEntries(blacklistSnapshot.docs);
             // Fetch whitelist domains
             const whitelistSnapshot = await this.db
                 .collection('domains')
                 .doc('whitelist')
                 .collection('entries')
                 .get();
-            const whitelistedDomains = whitelistSnapshot.docs.map((doc) => doc.data().domain);
+            const whitelistedDomains = this.normalizeWhitelistEntries(whitelistSnapshot.docs);
             // Update cache
             this.policyCache.updatePolicies({
                 blacklist: blacklistedDomains,
@@ -116,6 +114,9 @@ class PolicySyncManager {
                 syncStatus: 'success',
                 syncVersion: currentVersion,
                 lastSync: new Date().toISOString(),
+                blacklistedDomains: blacklistedDomains.length,
+                whitelistedDomains: whitelistedDomains.length,
+                enforcementMode: 'parent-domain-and-subdomains',
             });
             console.log('[v0] Policy sync completed successfully');
             console.log(`[v0] Blacklisted domains: ${blacklistedDomains.length}`);
@@ -141,12 +142,16 @@ class PolicySyncManager {
     async updateCoreDNSConfig(blacklistedDomains, whitelistedDomains) {
         try {
             console.log('[v0] Updating CoreDNS configuration...');
-            // Generate a hosts file for blocked domains. CoreDNS falls through for everything else.
+            // Keep a hosts file for exact-name compatibility and generate CoreDNS
+            // template rules so parent-domain policies also cover subdomains.
             let zoneContent = '# GCOT policy hosts file\n\n';
+            let templateContent = '# GCOT generated CoreDNS policy templates\n';
+            templateContent += '# Parent-domain blacklist entries apply to matching subdomains.\n\n';
             // Add blocked domains
             zoneContent += '# === Blacklisted Domains ===\n';
             blacklistedDomains.forEach((entry) => {
                 zoneContent += `${this.blockPageIp} ${entry.domain} # threat: ${entry.threatLevel}\n`;
+                templateContent += this.templateForBlockedDomain(entry.domain);
             });
             // Add whitelist comment
             zoneContent += '\n# === Whitelisted Domains (Always Allowed) ===\n';
@@ -154,10 +159,14 @@ class PolicySyncManager {
                 zoneContent += `# ${domain}\n`;
             });
             // Write zone file (in production, this would write to actual zone files)
-            const zoneFilePath = path.join(path.dirname(this.coreDnsConfigPath), 'policies.zone');
+            const policyDir = path.dirname(this.coreDnsConfigPath);
+            const zoneFilePath = path.join(policyDir, 'policies.zone');
+            const templateFilePath = path.join(policyDir, 'policies.coredns');
             fs.writeFileSync(zoneFilePath, zoneContent);
+            fs.writeFileSync(templateFilePath, templateContent);
             console.log('[v0] CoreDNS configuration updated');
             console.log(`[v0] Zone file written to: ${zoneFilePath}`);
+            console.log(`[v0] Policy template file written to: ${templateFilePath}`);
         }
         catch (error) {
             console.error('[v0] Error updating CoreDNS config:', error);
@@ -178,29 +187,80 @@ class PolicySyncManager {
         }
         try {
             for (const domain of domainsToFlush) {
-                (0, child_process_1.execSync)(`unbound-control flush ${this.shellQuote(domain)}`, {
-                    stdio: ['ignore', 'ignore', 'pipe'],
-                });
-                (0, child_process_1.execSync)(`unbound-control flush ${this.shellQuote(`www.${domain}`)}`, {
-                    stdio: ['ignore', 'ignore', 'pipe'],
-                });
+                this.runUnboundControl(`flush ${this.shellQuote(domain)}`);
+                this.runUnboundControl(`flush_zone ${this.shellQuote(domain)}`);
             }
-            (0, child_process_1.execSync)('unbound-control flush_negative', {
-                stdio: ['ignore', 'ignore', 'pipe'],
-            });
+            this.runUnboundControl('flush_negative');
             console.log(`[v0] Unbound cache flushed for ${domainsToFlush.size} policy domains`);
         }
         catch (flushError) {
             console.error('[v0] Failed to flush Unbound cache after policy update:', flushError);
         }
     }
+    normalizeBlacklistEntries(docs) {
+        const entries = new Map();
+        docs.forEach((doc) => {
+            const data = doc.data() || {};
+            const domain = this.cleanDomain(data.domain);
+            if (!domain)
+                return;
+            entries.set(domain, {
+                domain,
+                threatLevel: data.threatLevel || 'medium',
+            });
+        });
+        return Array.from(entries.values()).sort((a, b) => a.domain.localeCompare(b.domain));
+    }
+    normalizeWhitelistEntries(docs) {
+        const entries = new Set();
+        docs.forEach((doc) => {
+            const domain = this.cleanDomain((doc.data() || {}).domain);
+            if (domain)
+                entries.add(domain);
+        });
+        return Array.from(entries).sort((a, b) => a.localeCompare(b));
+    }
+    templateForBlockedDomain(domain) {
+        const baseDomain = domain.replace(/^\*\./, '');
+        const escapedDomain = this.escapeRegex(baseDomain);
+        const match = `(^|.*\\.)${escapedDomain}\\.$`;
+        let content = `template IN A ${baseDomain} {\n`;
+        content += `    match ${match}\n`;
+        content += `    answer "{{ .Name }} 30 IN A ${this.blockPageIp}"\n`;
+        content += '}\n';
+        content += `template IN AAAA ${baseDomain} {\n`;
+        content += `    match ${match}\n`;
+        if (this.blockPageIpv6) {
+            content += `    answer "{{ .Name }} 30 IN AAAA ${this.blockPageIpv6}"\n`;
+        }
+        else {
+            content += '    rcode NOERROR\n';
+        }
+        content += '}\n\n';
+        return content;
+    }
+    escapeRegex(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    runUnboundControl(args) {
+        (0, child_process_1.execSync)(`unbound-control ${args}`, {
+            stdio: ['ignore', 'ignore', 'pipe'],
+        });
+    }
     cleanDomain(domain) {
-        const clean = String(domain || '')
-            .split(':')[0]
-            .trim()
-            .replace(/\.$/, '')
-            .toLowerCase();
-        if (!/^[a-z0-9.-]+$/.test(clean))
+        let clean = String(domain || '').trim().toLowerCase();
+        if (!clean)
+            return '';
+        if (clean.includes('://') || /[/?#]/.test(clean)) {
+            try {
+                clean = new URL(clean.includes('://') ? clean : `http://${clean}`).hostname;
+            }
+            catch {
+                clean = clean.split(/[/?#]/)[0];
+            }
+        }
+        clean = clean.split(':')[0].replace(/\.$/, '');
+        if (!/^(\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(clean))
             return '';
         return clean.replace(/^\.+|\.+$/g, '');
     }

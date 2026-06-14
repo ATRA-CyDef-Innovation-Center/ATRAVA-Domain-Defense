@@ -37,6 +37,24 @@ exports.domainFunctions = exports.bulkImportDomains = exports.getBlacklistDomain
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
 const db = admin.firestore();
+function cleanDomainInput(value) {
+    let clean = String(value || '').trim().toLowerCase();
+    if (!clean)
+        return '';
+    if (clean.includes('://') || /[/?#]/.test(clean)) {
+        try {
+            clean = new URL(clean.includes('://') ? clean : `http://${clean}`).hostname;
+        }
+        catch {
+            clean = clean.split(/[/?#]/)[0];
+        }
+    }
+    clean = clean.split(':')[0].replace(/\.$/, '').replace(/^\.+|\.+$/g, '');
+    return /^(\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(clean) ? clean : '';
+}
+function domainDocId(domain) {
+    return String(domain).toLowerCase().replace(/[^a-z0-9-]/g, '_');
+}
 // Add a single domain to blacklist
 exports.addBlacklistDomain = functions.https.onRequest(async (req, res) => {
     try {
@@ -49,9 +67,14 @@ exports.addBlacklistDomain = functions.https.onRequest(async (req, res) => {
             res.status(400).json({ error: 'Missing required fields: domain, addedBy' });
             return;
         }
-        const docId = domain.toLowerCase().replace(/[^a-z0-9-]/g, '_');
+        const cleanDomain = cleanDomainInput(domain);
+        if (!cleanDomain) {
+            res.status(400).json({ error: 'Invalid domain' });
+            return;
+        }
+        const docId = domainDocId(cleanDomain);
         const entry = {
-            domain: domain.toLowerCase(),
+            domain: cleanDomain,
             threatLevel: threatLevel || 'medium',
             sources: sources || [],
             addedAt: new Date().toISOString(),
@@ -60,7 +83,7 @@ exports.addBlacklistDomain = functions.https.onRequest(async (req, res) => {
         await db.collection('domains').doc('blacklist').collection('entries').doc(docId).set(entry);
         // Log the action
         await logAction(addedBy, 'domain_added', {
-            domain,
+            domain: cleanDomain,
             threatLevel,
             sources,
             type: 'blacklist',
@@ -86,11 +109,16 @@ exports.removeBlacklistDomain = functions.https.onRequest(async (req, res) => {
             res.status(400).json({ error: 'Missing required field: domain' });
             return;
         }
-        const docId = domain.toLowerCase().replace(/[^a-z0-9-]/g, '_');
+        const cleanDomain = cleanDomainInput(domain);
+        if (!cleanDomain) {
+            res.status(400).json({ error: 'Invalid domain' });
+            return;
+        }
+        const docId = domainDocId(cleanDomain);
         await db.collection('domains').doc('blacklist').collection('entries').doc(docId).delete();
         // Log the action
         await logAction(removedBy, 'domain_removed', {
-            domain,
+            domain: cleanDomain,
             type: 'blacklist',
         });
         // Trigger node sync
@@ -132,10 +160,14 @@ exports.bulkImportDomains = functions.https.onRequest(async (req, res) => {
         const batch = db.batch();
         const collectionPath = type === 'blacklist' ? 'blacklist' : 'whitelist';
         const baseRef = db.collection('domains').doc(collectionPath).collection('entries');
+        let importedCount = 0;
         domains.forEach((domain) => {
-            const docId = domain.domain.toLowerCase().replace(/[^a-z0-9-]/g, '_');
+            const cleanDomain = cleanDomainInput(domain.domain);
+            if (!cleanDomain)
+                return;
+            const docId = domainDocId(cleanDomain);
             const entry = {
-                domain: domain.domain.toLowerCase(),
+                domain: cleanDomain,
                 ...(type === 'blacklist' && {
                     threatLevel: domain.threatLevel || 'medium',
                     sources: domain.sources || [],
@@ -145,16 +177,21 @@ exports.bulkImportDomains = functions.https.onRequest(async (req, res) => {
                 addedBy: importedBy || 'bulk-import',
             };
             batch.set(baseRef.doc(docId), entry);
+            importedCount += 1;
         });
+        if (!importedCount) {
+            res.status(400).json({ error: 'No valid domains to import' });
+            return;
+        }
         await batch.commit();
         // Log the action
         await logAction(importedBy, 'bulk_import', {
-            count: domains.length,
+            count: importedCount,
             type,
         });
         // Trigger node sync
         await triggerNodeSync();
-        res.json({ success: true, imported: domains.length });
+        res.json({ success: true, imported: importedCount });
     }
     catch (error) {
         console.error('[v0] Error bulk importing domains:', error);

@@ -38,13 +38,29 @@ function domainDocId(domain) {
   return String(domain).toLowerCase().trim().replace(/[^a-z0-9-]/g, '_');
 }
 
+function cleanDomainInput(value) {
+  let clean = String(value || '').trim().toLowerCase();
+  if (!clean) return '';
+
+  if (clean.includes('://') || /[/?#]/.test(clean)) {
+    try {
+      clean = new URL(clean.includes('://') ? clean : `http://${clean}`).hostname;
+    } catch {
+      clean = clean.split(/[/?#]/)[0];
+    }
+  }
+
+  clean = clean.split(':')[0].replace(/\.$/, '').replace(/^\.+|\.+$/g, '');
+  return /^(\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(clean) ? clean : '';
+}
+
 function parseBulkContent(content, fileType, type) {
   if (fileType === 'json') {
     const parsed = JSON.parse(content);
     if (!Array.isArray(parsed)) return [];
     return parsed
       .map((item) => ({
-        domain: String(item?.domain ?? '').trim().toLowerCase(),
+        domain: cleanDomainInput(item?.domain),
         threatLevel: String(item?.threatLevel ?? 'medium').trim().toLowerCase(),
         sources: Array.isArray(item?.sources) ? item.sources.map((entry) => String(entry).trim().toLowerCase()) : [],
         reason: String(item?.reason ?? '').trim(),
@@ -61,7 +77,7 @@ function parseBulkContent(content, fileType, type) {
 
   return lines.slice(1).map((line) => {
     const [rawDomain = '', rawThreatLevel = 'medium', rawSourcesOrReason = ''] = line.split(',');
-    const domain = rawDomain.trim().toLowerCase();
+    const domain = cleanDomainInput(rawDomain);
     if (type === 'blacklist') {
       return {
         domain,
@@ -181,7 +197,7 @@ export default function DomainsPage() {
 
   const handleAddDomain = async (payload) => {
     const listType = activeTab === 'blacklist' ? 'blacklist' : 'whitelist';
-    const cleanDomain = String(payload?.domain ?? '').trim().toLowerCase();
+    const cleanDomain = cleanDomainInput(payload?.domain);
     if (!cleanDomain) return;
 
     const entry = {

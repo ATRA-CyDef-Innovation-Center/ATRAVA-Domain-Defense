@@ -12,6 +12,10 @@ cat > /var/lib/coredns/policies.zone <<'EOF'
 # GCOT policy hosts file
 EOF
 
+cat > /var/lib/coredns/policies.coredns <<'EOF'
+# GCOT generated CoreDNS policy templates
+EOF
+
 echo "[entrypoint] Checking Unbound configuration..."
 unbound-checkconf /etc/unbound/unbound.conf
 

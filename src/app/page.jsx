@@ -39,6 +39,14 @@ function nodeBlockedCount(node) {
   return Number(node.blockedQueries || 0);
 }
 
+function syncLabel(node) {
+  const status = String(node.syncStatus || 'unknown').toLowerCase();
+  if (status === 'success') return 'Policy synced';
+  if (status === 'pending') return 'Policy sync pending';
+  if (status === 'error') return 'Policy sync error';
+  return 'Policy sync unknown';
+}
+
 function relativeTime(value) {
   const date = normalizeDate(value);
   if (!date) return 'Unknown';
@@ -93,21 +101,23 @@ export default function DashboardPage() {
       {
         title: 'Total DNS Queries',
         value: totalQueries.toLocaleString(),
-        description: 'Reported by active nodes',
+        description: 'Resolver counter from active nodes',
         icon: Globe,
         color: 'text-blue-500',
       },
       {
-        title: 'Estimated Queries Blocked',
+        title: 'Policy-Matched Queries',
         value: Math.round(blockedQueries).toLocaleString(),
-        description: 'Derived from node block rate',
+        description: sampledQueries
+          ? `From ${sampledQueries.toLocaleString()} recent DNS log lines`
+          : 'Reported by node telemetry',
         icon: ShieldAlert,
         color: 'text-red-500',
       },
       {
         title: 'Active Blacklist',
         value: blacklistEntries.length.toLocaleString(),
-        description: 'Domains currently enforced',
+        description: 'Parent domains and subdomains',
         icon: ShieldCheck,
         color: 'text-emerald-500',
       },
@@ -138,7 +148,9 @@ export default function DashboardPage() {
   const queryMixData = useMemo(() => {
     const totalQueries = nodes.reduce((sum, node) => sum + nodeQueryCount(node), 0);
     const blockedQueries = nodes.reduce((sum, node) => sum + nodeBlockedCount(node), 0);
-    const allowedQueries = Math.max(totalQueries - blockedQueries, 0);
+    const sampledQueries = nodes.reduce((sum, node) => sum + Number(node.sampledQueries || 0), 0);
+    const denominator = sampledQueries || totalQueries;
+    const allowedQueries = Math.max(denominator - blockedQueries, 0);
 
     return [
       { name: 'Allowed', value: allowedQueries, color: '#22c55e' },
@@ -153,10 +165,13 @@ export default function DashboardPage() {
           name: node.name || node.nodeId || node.id,
           queries: nodeQueryCount(node),
           blocked: nodeBlockedCount(node),
+          sampled: Number(node.sampledQueries || 0),
           blockRate: parsePercent(node.blockRate),
           cacheHitRate: Number(node.unboundCacheHitRate || 0),
           status: node.status || 'unknown',
+          syncStatus: node.syncStatus || 'unknown',
           lastSeen: normalizeDate(node.lastHealthCheck || node.lastSync),
+          lastSync: normalizeDate(node.lastSync),
         }))
         .sort((a, b) => b.queries - a.queries),
     [nodes]
@@ -256,7 +271,7 @@ export default function DashboardPage() {
               <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle>DNS Decisions</CardTitle>
-                  <CardDescription>Allowed vs blocked traffic reported by nodes</CardDescription>
+                  <CardDescription>Allowed vs policy-matched traffic reported by nodes</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {queryMixData.length > 0 ? (
@@ -320,19 +335,26 @@ export default function DashboardPage() {
                               <p className="text-xs text-muted-foreground">
                                 Last seen {node.lastSeen ? relativeTime(node.lastSeen) : 'Unknown'}
                               </p>
+                              <p className="text-xs text-muted-foreground">
+                                {syncLabel(node)}{node.lastSync ? ` ${relativeTime(node.lastSync)}` : ''}
+                              </p>
                             </div>
                             <Badge className={node.status === 'online' ? 'bg-green-900 text-green-100' : 'bg-yellow-900 text-yellow-100'}>
                               {String(node.status).toUpperCase()}
                             </Badge>
                           </div>
-                          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
                             <div>
                               <p className="text-xs text-muted-foreground">Queries</p>
                               <p className="font-semibold text-foreground">{node.queries.toLocaleString()}</p>
                             </div>
                             <div>
-                              <p className="text-xs text-muted-foreground">Blocked</p>
+                              <p className="text-xs text-muted-foreground">Policy Matches</p>
                               <p className="font-semibold text-foreground">{node.blocked.toLocaleString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Sampled</p>
+                              <p className="font-semibold text-foreground">{node.sampled.toLocaleString()}</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Block Rate</p>
